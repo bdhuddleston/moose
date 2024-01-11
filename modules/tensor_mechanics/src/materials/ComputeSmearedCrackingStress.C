@@ -377,6 +377,9 @@ ComputeSmearedCrackingStress::updateCrackingStateAndStress()
       ElasticityTensorTools::getIsotropicYoungsModulus(_elasticity_tensor[_qp]);
   const Real cracking_alpha = -youngs_modulus;
 
+  const Real poissons_ratio = 
+      ElasticityTensorTools::getIsotropicPoissonsRatio(_elasticity_tensor[_qp]);
+
   Real cracking_stress = _cracking_stress[_qp];
 
   if (cracking_stress > 0)
@@ -455,7 +458,8 @@ ComputeSmearedCrackingStress::updateCrackingStateAndStress()
                                                        _crack_initiation_strain[_qp](i),
                                                        _crack_max_strain[_qp](i),
                                                        cracking_stress,
-                                                       youngs_modulus);
+                                                       youngs_modulus, 
+                                                       poissons_ratio);
         else
           computeCrackingRelease(i,
                                  sigma(i),
@@ -463,7 +467,8 @@ ComputeSmearedCrackingStress::updateCrackingStateAndStress()
                                  strain_in_crack_dir(i),
                                  cracking_stress,
                                  cracking_alpha,
-                                 youngs_modulus);
+                                 youngs_modulus,
+                                 poissons_ratio);
         _crack_damage[_qp](i) = 1.0 - stiffness_ratio;
       }
 
@@ -588,7 +593,8 @@ ComputeSmearedCrackingStress::computeCrackingRelease(int i,
                                                      const Real strain_in_crack_dir,
                                                      const Real cracking_stress,
                                                      const Real cracking_alpha,
-                                                     const Real youngs_modulus)
+                                                     const Real youngs_modulus, 
+                                                     const Real poissons_ratio)
 {
   switch (_cracking_release)
   {

@@ -60,7 +60,8 @@ protected:
                                       const Real strain_in_crack_dir,
                                       const Real cracking_stress,
                                       const Real cracking_alpha,
-                                      const Real youngs_modulus);
+                                      const Real youngs_modulus, 
+                                      const Real poissons_ratio);
 
   /**
    * Get the number of known crack directions. This includes cracks
