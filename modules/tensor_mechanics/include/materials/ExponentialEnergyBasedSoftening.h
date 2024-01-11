@@ -11,19 +11,17 @@
 
 #include "SmearedCrackSofteningBase.h"
 
-// Forward declaration
-
 /**
- * PowerLawSoftening is a smeared crack softening model that
- * uses a power law equation to soften the tensile response.
- * It is for use with ComputeSmearedCrackingStress.
+ * ExponentialEnergyBasedSoftening is a smeared crack softening model that
+ * uses an exponential softening curve where the softening slope is 
+ * dependent on each element size and the fracture toughness.
  */
-class PowerLawSoftening : public SmearedCrackSofteningBase
+class ExponentialEnergyBasedSoftening : public SmearedCrackSofteningBase
 {
 public:
   static InputParameters validParams();
 
-  PowerLawSoftening(const InputParameters & parameters);
+  ExponentialEnergyBasedSoftening(const InputParameters & parameters);
 
   virtual void computeCrackingRelease(Real & stress,
                                       Real & stiffness_ratio,
@@ -35,6 +33,16 @@ public:
                                       const Real poissons_ratio) override;
 
 protected:
-  /// Reduction factor applied to the initial stiffness each time a new crack initiates
-  const Real & _stiffness_reduction;
+
+  /// Fracture toughness
+  const Real & _fracture_toughness;
+
+  /// poisson's ratio
+  const Real & _nu; 
+
+  /// Problem dimension controls how to estimate the element size
+  //const Real & _dimension;
+
+  /// Residual stress after full softening
+  const Real & _residual_stress;
 };
