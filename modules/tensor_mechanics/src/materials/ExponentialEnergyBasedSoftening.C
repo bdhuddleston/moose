@@ -46,8 +46,7 @@ ExponentialEnergyBasedSoftening::ExponentialEnergyBasedSoftening(const InputPara
   : SmearedCrackSofteningBase(parameters),
     _residual_stress(getParam<Real>("residual_stress")),
     _fracture_toughness(getParam<Real>("fracture_toughness")),
-    _nu(getParam<Real>("poissons_ratio"))/*,
-    _dimension(getParam<Real>("dimension"))*/
+    _nu(getParam<Real>("poissons_ratio"))
 {
 }
 
@@ -64,26 +63,25 @@ ExponentialEnergyBasedSoftening::computeCrackingRelease(Real & stress,
   mooseAssert(crack_max_strain >= crack_initiation_strain,
               "crack_max_strain must be >= crack_initiation_strain");
   
-  unsigned int dim = _current_elem->dim(); // this or parameter
+  unsigned int dim = _current_elem->dim();
   
   // Get estimate of element size
   Real ele_len = 0.0;
-  if (dim == 3.0) {
+  if (dim == 3) {
     ele_len = std::cbrt(_current_elem->volume());
   } else {
     ele_len = std::sqrt(_current_elem->volume());
   }
 
   // Calculate initial slope of exponential curve
-  Real Gc = (_fracture_toughness * _fracture_toughness) * (1 - _nu * _nu) / youngs_modulus;  
-  const Real sqrstress = cracking_stress * cracking_stress; 
-  const Real l_max = 2 * Gc * youngs_modulus / sqrstress;
+  Real energy_release_rate = (_fracture_toughness * _fracture_toughness) * (1 - _nu * _nu) / youngs_modulus;  
+  const Real frac_stress_sqr = cracking_stress * cracking_stress; 
+  const Real l_max = 2 * energy_release_rate * youngs_modulus / frac_stress_sqr;
 
-  //TODO: check against maximum allowed element size - then what? cap at 1e5 x youngs_modulus
+  //check against maximum allowed element size - avoid the divide by zero by capping at a large slope
   Real initial_slope = -1e5*youngs_modulus;
-  if (ele_len < l_max) {
-    initial_slope = -sqrstress / (Gc / ele_len - sqrstress / (2*youngs_modulus)); 
-  }
+  if (ele_len < l_max) 
+    initial_slope = -frac_stress_sqr / (energy_release_rate / ele_len - frac_stress_sqr / (2*youngs_modulus)); 
 
   // Compute stress that follows exponental curve
   stress = cracking_stress *
