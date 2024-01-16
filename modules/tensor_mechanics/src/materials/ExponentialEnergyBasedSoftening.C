@@ -78,7 +78,7 @@ ExponentialEnergyBasedSoftening::computeCrackingRelease(Real & stress,
   const Real frac_stress_sqr = cracking_stress * cracking_stress; 
   const Real l_max = 2 * energy_release_rate * youngs_modulus / frac_stress_sqr;
 
-  //check against maximum allowed element size - avoid the divide by zero by capping at a large slope
+  // Check against maximum allowed element size - avoid the divide by zero by capping at a large slope
   Real initial_slope = -1e5*youngs_modulus;
   if (ele_len < l_max) 
     initial_slope = -frac_stress_sqr / (energy_release_rate / ele_len - frac_stress_sqr / (2*youngs_modulus)); 
