@@ -29,16 +29,6 @@ ExponentialEnergyBasedSoftening::validParams()
       "fracture_toughness",
       "fracture_toughness > 0",
       "Fracture toughness used to calculate the softening slope. ");
-  params.addRequiredRangeCheckedParam<Real>(
-      "poissons_ratio",
-      "poissons_ratio >= 0 & poissons_ratio <= 0.5",
-      "Poisson's ratio needed for fracture energy calculation. ");
-  // params.addRangeCheckedParam<unsigned int>(
-  //     "dimension",
-  //     3,
-  //     "dimension > 0 & dimension < 4",
-  //     "Variable indicating problem dimension for calcuating element size. Defaults "
-  //     "to 3 dimensional. "); //TODO: get dimension of the problem from mesh? mesh.dim
   return params;
 }
 
@@ -74,7 +64,7 @@ ExponentialEnergyBasedSoftening::computeCrackingRelease(Real & stress,
   }
 
   // Calculate initial slope of exponential curve
-  Real energy_release_rate = (_fracture_toughness * _fracture_toughness) * (1 - _nu * _nu) / youngs_modulus;  
+  Real energy_release_rate = (_fracture_toughness * _fracture_toughness) * (1 - poissons_ratio * poissons_ratio) / youngs_modulus;  
   const Real frac_stress_sqr = cracking_stress * cracking_stress; 
   const Real l_max = 2 * energy_release_rate * youngs_modulus / frac_stress_sqr;
 
