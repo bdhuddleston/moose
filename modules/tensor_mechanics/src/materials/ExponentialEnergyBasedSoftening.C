@@ -35,8 +35,7 @@ ExponentialEnergyBasedSoftening::validParams()
 ExponentialEnergyBasedSoftening::ExponentialEnergyBasedSoftening(const InputParameters & parameters)
   : SmearedCrackSofteningBase(parameters),
     _residual_stress(getParam<Real>("residual_stress")),
-    _fracture_toughness(getParam<Real>("fracture_toughness")),
-    _nu(getParam<Real>("poissons_ratio"))
+    _fracture_toughness(getParam<Real>("fracture_toughness"))
 {
 }
 
