@@ -37,12 +37,6 @@ protected:
   /// Fracture toughness
   const Real & _fracture_toughness;
 
-  /// poisson's ratio
-  const Real & _nu; 
-
-  /// Problem dimension controls how to estimate the element size
-  //const Real & _dimension;
-
   /// Residual stress after full softening
   const Real & _residual_stress;
 };
