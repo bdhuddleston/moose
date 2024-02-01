@@ -40,7 +40,7 @@ AbruptSoftening::computeCrackingRelease(Real & stress,
                                         const Real crack_max_strain,
                                         const Real cracking_stress,
                                         const Real youngs_modulus, 
-                                        const Real poissons_ratio)
+                                        const Real /*poissons_ratio*/)
 {
   if (_residual_stress == 0.0)
   {
