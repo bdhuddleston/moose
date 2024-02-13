@@ -326,7 +326,6 @@ ComputeSmearedCrackingStress::updateLocalElasticityTensor()
           cracking_locally_active = true;
         }
       }
-      std::cout << "BDH stiffness ratio " << stiffness_ratio_local(i) << std::endl;
     }
 
     if (cracking_locally_active)
