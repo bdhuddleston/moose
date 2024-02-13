@@ -78,5 +78,6 @@ ExponentialEnergyBasedSoftening::computeCrackingRelease(Real & stress,
             (1.0 - _residual_stress) * std::exp(initial_slope / cracking_stress *
                                                 (crack_max_strain - crack_initiation_strain)));
   // Compute ratio of current stiffness to original stiffness
+  // stiffness_ratio = youngs_modulus / (stress / crack_max_strain);
   stiffness_ratio = stress * crack_initiation_strain / (crack_max_strain * cracking_stress);
 }
