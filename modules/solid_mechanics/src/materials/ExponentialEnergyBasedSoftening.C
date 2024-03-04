@@ -7,14 +7,14 @@
 //* Licensed under LGPL 2.1, please see LICENSE for details
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
-#include "ExponentialSoftening.h"
+#include "ExponentialEnergyBasedSoftening.h" 
 
 #include "MooseMesh.h"
 
-registerMooseObject("SolidMechanicsApp", ExponentialSoftening);
+registerMooseObject("TensorMechanicsApp", ExponentialEnergyBasedSoftening);
 
 InputParameters
-ExponentialSoftening::validParams()
+ExponentialEnergyBasedSoftening::validParams()
 {
   InputParameters params = SmearedCrackSofteningBase::validParams();
   params.addClassDescription(
@@ -25,54 +25,59 @@ ExponentialSoftening::validParams()
       0.0,
       "residual_stress <= 1 & residual_stress >= 0",
       "The fraction of the cracking stress allowed to be maintained following a crack.");
-  params.addRangeCheckedParam<Real>(
-      "alpha",
-      -1.0,
-      "alpha <= 0",
-      "Initial slope of the exponential softening curve at crack initiation. "
-      "If not specified, it is equal to the negative of the Young's modulus.");
-  params.addRangeCheckedParam<Real>(
-      "beta",
-      1.0,
-      "beta >= 0",
-      "Multiplier applied to alpha to control the exponential softening "
-      "behavior.");
+  params.addRequiredRangeCheckedParam<Real>(
+      "fracture_toughness",
+      "fracture_toughness > 0",
+      "Fracture toughness used to calculate the softening slope. ");
   return params;
 }
 
-ExponentialSoftening::ExponentialSoftening(const InputParameters & parameters)
+ExponentialEnergyBasedSoftening::ExponentialEnergyBasedSoftening(const InputParameters & parameters)
   : SmearedCrackSofteningBase(parameters),
     _residual_stress(getParam<Real>("residual_stress")),
-    _alpha(getParam<Real>("alpha")),
-    _alpha_set_by_user(parameters.isParamSetByUser("alpha")),
-    _beta(getParam<Real>("beta"))
+    _fracture_toughness(getParam<Real>("fracture_toughness"))
 {
 }
 
 void
-ExponentialSoftening::computeCrackingRelease(Real & stress,
+ExponentialEnergyBasedSoftening::computeCrackingRelease(Real & stress,
                                              Real & stiffness_ratio,
                                              const Real /*strain*/,
                                              const Real crack_initiation_strain,
                                              const Real crack_max_strain,
                                              const Real cracking_stress,
                                              const Real youngs_modulus, 
-                                             const Real /*poissons_ratio*/)
+                                             const Real poissons_ratio)
 {
   mooseAssert(crack_max_strain >= crack_initiation_strain,
               "crack_max_strain must be >= crack_initiation_strain");
+  
+  unsigned int dim = _current_elem->dim();
+  
+  // Get estimate of element size
+  Real ele_len = 0.0;
+  if (dim == 3) {
+    ele_len = std::cbrt(_current_elem->volume());
+  } else {
+    ele_len = std::sqrt(_current_elem->volume());
+  }
 
-  Real alpha = 0.0;
-  if (_alpha_set_by_user)
-    alpha = _alpha;
-  else
-    alpha = -youngs_modulus;
+  // Calculate initial slope of exponential curve
+  Real energy_release_rate = (_fracture_toughness * _fracture_toughness) * (1 - poissons_ratio * poissons_ratio) / youngs_modulus;  
+  const Real frac_stress_sqr = cracking_stress * cracking_stress;
+  const Real l_max = 2 * energy_release_rate * youngs_modulus / frac_stress_sqr;
+
+  // Check against maximum allowed element size - avoid the divide by zero by capping at a large slope
+  Real initial_slope = -1e5*youngs_modulus;
+  if (ele_len < l_max) // TODO: need to log if this isn't true
+    initial_slope = -frac_stress_sqr / (energy_release_rate / ele_len - frac_stress_sqr / (2*youngs_modulus));
 
   // Compute stress that follows exponental curve
   stress = cracking_stress *
            (_residual_stress +
-            (1.0 - _residual_stress) * std::exp(alpha * _beta / cracking_stress *
+            (1.0 - _residual_stress) * std::exp(initial_slope / cracking_stress *
                                                 (crack_max_strain - crack_initiation_strain)));
   // Compute ratio of current stiffness to original stiffness
+  // stiffness_ratio = youngs_modulus / (stress / crack_max_strain);
   stiffness_ratio = stress * crack_initiation_strain / (crack_max_strain * cracking_stress);
 }
