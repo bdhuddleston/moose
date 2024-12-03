@@ -380,6 +380,7 @@ Console::output()
   else if (type == EXEC_TIMESTEP_END)
     writeVariableNorms();
 
+  _console << "Checking output of PPs at " << type << std::endl;
   if (wantOutput("postprocessors", type))
     outputPostprocessors();
 
