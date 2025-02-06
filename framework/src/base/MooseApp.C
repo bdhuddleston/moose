@@ -434,6 +434,7 @@ MooseApp::MooseApp(InputParameters parameters)
     _factory(*this),
     _error_overridden(false),
     _early_exit_param(""),
+    _ready_to_exit(false),
     _exit_code(0),
     _initial_from_file(false),
     _distributed_mesh_on_command_line(false),
@@ -822,12 +823,14 @@ MooseApp::setupOptions()
   {
     Moose::out << getPrintableVersion() << std::endl;
     _early_exit_param = "--version";
+    _ready_to_exit = true;
     return;
   }
   else if (getParam<bool>("help"))
   {
     _command_line->printUsage();
     _early_exit_param = "--help";
+    _ready_to_exit = true;
   }
   else if (getParam<bool>("dump") || isParamSetByUser("dump_search"))
   {
@@ -851,6 +854,7 @@ MooseApp::setupOptions()
       Moose::out << "\n### START DUMP DATA ###\n"
                  << formatter.toString(tree.getRoot()) << "\n### END DUMP DATA ###" << std::endl;
       _early_exit_param = "--dump";
+      _ready_to_exit = true;
     }
     else
       mooseError("Search parameter '", search, "' was not found in the registered syntax.");
@@ -875,6 +879,7 @@ MooseApp::setupOptions()
                    << act->_file << "\n";
     }
     _early_exit_param = "--registry";
+    _ready_to_exit = true;
   }
   else if (getParam<bool>("registry_hit"))
   {
@@ -920,6 +925,7 @@ MooseApp::setupOptions()
 
     Moose::out << "\n### END REGISTRY DATA ###\n";
     _early_exit_param = "--registry_hit";
+    _ready_to_exit = true;
   }
   else if (getParam<bool>("definition"))
   {
@@ -931,6 +937,7 @@ MooseApp::setupOptions()
     Moose::out << "%-START-SON-DEFINITION-%\n"
                << formatter.toString(tree.getRoot()) << "\n%-END-SON-DEFINITION-%\n";
     _early_exit_param = "--definition";
+    _ready_to_exit = true;
   }
   else if (getParam<bool>("yaml") || isParamSetByUser("yaml_search"))
   {
@@ -942,6 +949,7 @@ MooseApp::setupOptions()
     _builder.buildFullTree(search);
 
     _early_exit_param = "--yaml";
+    _ready_to_exit = true;
   }
   else if (getParam<bool>("json") || isParamSetByUser("json_search"))
   {
@@ -954,6 +962,7 @@ MooseApp::setupOptions()
 
     Moose::out << "**START JSON DATA**\n" << tree.getRoot().dump(2) << "\n**END JSON DATA**\n";
     _early_exit_param = "--json";
+    _ready_to_exit = true;
   }
   else if (getParam<bool>("syntax"))
   {
@@ -965,6 +974,7 @@ MooseApp::setupOptions()
       Moose::out << it.first << "\n";
     Moose::out << "**END SYNTAX DATA**\n" << std::endl;
     _early_exit_param = "--syntax";
+    _ready_to_exit = true;
   }
   else if (getParam<bool>("show_type"))
   {
@@ -972,6 +982,7 @@ MooseApp::setupOptions()
 
     Moose::out << "MooseApp Type: " << type() << std::endl;
     _early_exit_param = "--show-type";
+    _ready_to_exit = true;
   }
   else if (getInputFileNames().size())
   {
@@ -1061,12 +1072,14 @@ MooseApp::setupOptions()
     moose_server.run();
 
     _early_exit_param = "--language-server";
+    _ready_to_exit = true;
   }
 
   else /* The catch-all case for bad options or missing options, etc. */
   {
     _command_line->printUsage();
     _early_exit_param = "bad or missing";
+    _ready_to_exit = true;
     _exit_code = 1;
   }
 
@@ -1118,19 +1131,26 @@ MooseApp::runInputFile()
   TIME_SECTION("runInputFile", 3);
 
   // If early exit param has been set, then just return
-  if (!_early_exit_param.empty())
+  if (_ready_to_exit)
     return;
 
   _action_warehouse.executeAllActions();
 
   if (isParamSetByUser("mesh_only"))
+  {
     _early_exit_param = "--mesh-only";
+    _ready_to_exit = true;
+  }
   else if (isParamSetByUser("split_mesh"))
+  {
     _early_exit_param = "--split-mesh";
+    _ready_to_exit = true;
+  }
   else if (getParam<bool>("list_constructed_objects"))
   {
     // TODO: ask multiapps for their constructed objects
     _early_exit_param = "--list-constructed-objects";
+    _ready_to_exit = true;
     std::vector<std::string> obj_list = _factory.getConstructedObjects();
     Moose::out << "**START OBJECT DATA**\n";
     for (const auto & name : obj_list)
@@ -1175,7 +1195,7 @@ MooseApp::executeExecutioner()
   TIME_SECTION("executeExecutioner", 3);
 
   // If ready to exit has been set, then just return
-  if (!_early_exit_param.empty())
+  if (_ready_to_exit)
     return;
 
   // run the simulation
@@ -1552,12 +1572,14 @@ MooseApp::run()
 
     Moose::out << docmsg << "\n";
     _early_exit_param = "--docs";
+    _ready_to_exit = true;
     return;
   }
 
   if (showInputs() || copyInputs() || runInputs())
   {
     _early_exit_param = "--show-input, --copy-inputs, or --run";
+    _ready_to_exit = true;
     return;
   }
 
