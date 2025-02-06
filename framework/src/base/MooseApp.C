@@ -1178,6 +1178,7 @@ MooseApp::errorCheck()
           _early_exit_param,
           ".");
     }
+    // We should never get here
     mooseError("The Executor is being called without being initialized. This is likely "
                "caused by "
                "incompatible command line arguments");
