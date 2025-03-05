@@ -848,8 +848,8 @@ Assembly::reinitFE(const Elem * elem)
       else
       {
         const auto & regular_grad_phi = _fe_shape_data[fe_type]->_grad_phi;
-        for (unsigned qp = 0; qp < n_qp; ++qp)
-          for (decltype(num_shapes) i = 0; i < num_shapes; ++i)
+        for (decltype(num_shapes) i = 0; i < num_shapes; ++i)
+          for (unsigned qp = 0; qp < n_qp; ++qp)
             grad_phi[i][qp] = regular_grad_phi[i][qp];
       }
     }
@@ -869,8 +869,8 @@ Assembly::reinitFE(const Elem * elem)
       else
       {
         const auto & regular_grad_phi = _vector_fe_shape_data[fe_type]->_grad_phi;
-        for (unsigned qp = 0; qp < n_qp; ++qp)
-          for (decltype(num_shapes) i = 0; i < num_shapes; ++i)
+        for (decltype(num_shapes) i = 0; i < num_shapes; ++i)
+          for (unsigned qp = 0; qp < n_qp; ++qp)
             grad_phi[i][qp] = regular_grad_phi[i][qp];
       }
     }
@@ -2134,15 +2134,19 @@ Assembly::computeADFace(const Elem & elem, const unsigned int side)
         computeSinglePointMapAD(&elem, dummy_qw, qp, _holder_fe_face_helper[dim]);
     }
     else
+    {
       for (unsigned qp = 0; qp < n_qp; ++qp)
       {
         _ad_JxW_face[qp] = _current_JxW_face[qp];
-        if (_calculate_face_xyz)
-          _ad_q_points_face[qp] = _current_q_points_face[qp];
         _ad_normals[qp] = _current_normals[qp];
-        if (_calculate_curvatures)
-          _ad_curvatures[qp] = _curvatures[qp];
       }
+      if (_calculate_face_xyz)
+        for (unsigned qp = 0; qp < n_qp; ++qp)
+          _ad_q_points_face[qp] = _current_q_points_face[qp];
+      if (_calculate_curvatures)
+        for (unsigned qp = 0; qp < n_qp; ++qp)
+          _ad_curvatures[qp] = _curvatures[qp];
+    }
 
     for (const auto & it : _fe_face[dim])
     {
@@ -2160,8 +2164,8 @@ Assembly::computeADFace(const Elem & elem, const unsigned int side)
       if (_displaced)
         computeGradPhiAD(&elem, n_qp, grad_phi, &fe);
       else
-        for (unsigned qp = 0; qp < n_qp; ++qp)
-          for (decltype(num_shapes) i = 0; i < num_shapes; ++i)
+        for (decltype(num_shapes) i = 0; i < num_shapes; ++i)
+          for (unsigned qp = 0; qp < n_qp; ++qp)
             grad_phi[i][qp] = regular_grad_phi[i][qp];
     }
     for (const auto & it : _vector_fe_face[dim])
@@ -2180,8 +2184,8 @@ Assembly::computeADFace(const Elem & elem, const unsigned int side)
       if (_displaced)
         computeGradPhiAD(&elem, n_qp, grad_phi, &fe);
       else
-        for (unsigned qp = 0; qp < n_qp; ++qp)
-          for (decltype(num_shapes) i = 0; i < num_shapes; ++i)
+        for (decltype(num_shapes) i = 0; i < num_shapes; ++i)
+          for (unsigned qp = 0; qp < n_qp; ++qp)
             grad_phi[i][qp] = regular_grad_phi[i][qp];
     }
   }
