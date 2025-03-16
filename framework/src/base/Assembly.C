@@ -1395,7 +1395,7 @@ Assembly::computeFaceMap(const Elem & elem, const unsigned int side, const std::
                 side_point(direction).derivatives(), node.dof_number(sys_num, disp_num, 0), 1.);
       }
 
-      for (unsigned int p = 0; p < n_qp; p++)
+      for (const auto p : make_range(n_qp))
       {
         if (_calculate_face_xyz)
         {
@@ -1416,13 +1416,13 @@ Assembly::computeFaceMap(const Elem & elem, const unsigned int side, const std::
       if (_calculate_curvatures)
         _ad_d2xyzdxi2_map.resize(n_qp);
 
-      for (unsigned int p = 0; p < n_qp; p++)
+      for (const auto p : make_range(n_qp))
         _ad_dxyzdxi_map[p].zero();
       if (_calculate_face_xyz)
-        for (unsigned int p = 0; p < n_qp; p++)
+        for (const auto p : make_range(n_qp))
           _ad_q_points_face[p].zero();
       if (_calculate_curvatures)
-        for (unsigned int p = 0; p < n_qp; p++)
+        for (const auto p : make_range(n_qp))
           _ad_d2xyzdxi2_map[p].zero();
 
       const auto n_mapping_shape_functions =
@@ -1438,17 +1438,17 @@ Assembly::computeFaceMap(const Elem & elem, const unsigned int side, const std::
             Moose::derivInsert(
                 side_point(direction).derivatives(), node.dof_number(sys_num, disp_num, 0), 1.);
 
-        for (unsigned int p = 0; p < n_qp; p++)
+        for (const auto p : make_range(n_qp))
           _ad_dxyzdxi_map[p].add_scaled(side_point, dpsidxi_map[i][p]);
         if (_calculate_face_xyz)
-          for (unsigned int p = 0; p < n_qp; p++)
+          for (const auto p : make_range(n_qp))
             _ad_q_points_face[p].add_scaled(side_point, psi_map[i][p]);
         if (_calculate_curvatures)
-          for (unsigned int p = 0; p < n_qp; p++)
+          for (const auto p : make_range(n_qp))
             _ad_d2xyzdxi2_map[p].add_scaled(side_point, (*d2psidxi2_map)[i][p]);
       }
 
-      for (unsigned int p = 0; p < n_qp; p++)
+      for (const auto p : make_range(n_qp))
       {
         _ad_normals[p] =
             (VectorValue<ADReal>(_ad_dxyzdxi_map[p](1), -_ad_dxyzdxi_map[p](0), 0.)).unit();
@@ -1477,16 +1477,16 @@ Assembly::computeFaceMap(const Elem & elem, const unsigned int side, const std::
         _ad_d2xyzdeta2_map.resize(n_qp);
       }
 
-      for (unsigned int p = 0; p < n_qp; p++)
+      for (const auto p : make_range(n_qp))
       {
         _ad_dxyzdxi_map[p].zero();
         _ad_dxyzdeta_map[p].zero();
       }
       if (_calculate_face_xyz)
-        for (unsigned int p = 0; p < n_qp; p++)
+        for (const auto p : make_range(n_qp))
           _ad_q_points_face[p].zero();
       if (_calculate_curvatures)
-        for (unsigned int p = 0; p < n_qp; p++)
+        for (const auto p : make_range(n_qp))
         {
           _ad_d2xyzdxi2_map[p].zero();
           _ad_d2xyzdxideta_map[p].zero();
@@ -1506,16 +1506,16 @@ Assembly::computeFaceMap(const Elem & elem, const unsigned int side, const std::
             Moose::derivInsert(
                 side_point(direction).derivatives(), node.dof_number(sys_num, disp_num, 0), 1.);
 
-        for (unsigned int p = 0; p < n_qp; p++)
+        for (const auto p : make_range(n_qp))
         {
           _ad_dxyzdxi_map[p].add_scaled(side_point, dpsidxi_map[i][p]);
           _ad_dxyzdeta_map[p].add_scaled(side_point, dpsideta_map[i][p]);
         }
         if (_calculate_face_xyz)
-          for (unsigned int p = 0; p < n_qp; p++)
+          for (const auto p : make_range(n_qp))
             _ad_q_points_face[p].add_scaled(side_point, psi_map[i][p]);
         if (_calculate_curvatures)
-          for (unsigned int p = 0; p < n_qp; p++)
+          for (const auto p : make_range(n_qp))
           {
             _ad_d2xyzdxi2_map[p].add_scaled(side_point, (*d2psidxi2_map)[i][p]);
             _ad_d2xyzdxideta_map[p].add_scaled(side_point, (*d2psidxideta_map)[i][p]);
@@ -1523,7 +1523,7 @@ Assembly::computeFaceMap(const Elem & elem, const unsigned int side, const std::
           }
       }
 
-      for (unsigned int p = 0; p < n_qp; p++)
+      for (const auto p : make_range(n_qp))
       {
         _ad_normals[p] = _ad_dxyzdxi_map[p].cross(_ad_dxyzdeta_map[p]).unit();
 
