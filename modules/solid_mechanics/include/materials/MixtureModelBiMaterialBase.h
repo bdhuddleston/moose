@@ -35,15 +35,14 @@ protected:
    */
   virtual void assignQpPropertiesFromMixtureModel() = 0;
 
+  /// Coupled variable for defining mixture ratio
+  const VariableValue & _material_ratio;
+
   /// global material properties
   const std::string _base_name;
 
   /// Property name
   std::string _prop_name;
-
-  /// Coupled variable for defining mixture ratio
-  const VariableValue & _material_ratio;
-
 };
 
 typedef MixtureModelBiMaterialBaseTempl<false> MixtureModelBiMaterialBase;
