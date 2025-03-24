@@ -34,9 +34,9 @@ public:
 
 protected:
 
-  /// Fracture toughness
-  const Real & _fracture_toughness;
-
   /// Residual stress after full softening
   const Real & _residual_stress;
+
+  /// Fracture toughness
+  const Real & _fracture_toughness;
 };
