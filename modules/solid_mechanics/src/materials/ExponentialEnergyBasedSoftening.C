@@ -42,7 +42,7 @@ ExponentialEnergyBasedSoftening::ExponentialEnergyBasedSoftening(const InputPara
 void
 ExponentialEnergyBasedSoftening::computeCrackingRelease(Real & stress,
                                              Real & stiffness_ratio,
-                                             const Real /*strain*/,
+                                             const Real strainrate,
                                              const Real crack_initiation_strain,
                                              const Real crack_max_strain,
                                              const Real cracking_stress,
@@ -63,7 +63,8 @@ ExponentialEnergyBasedSoftening::computeCrackingRelease(Real & stress,
   }
 
   // Calculate initial slope of exponential curve
-  Real energy_release_rate = (_fracture_toughness * _fracture_toughness) * (1 - poissons_ratio * poissons_ratio) / youngs_modulus;  
+  Real ratetoughness = _fracture_toughness/1.1 * (1.0 + 0.1 * std::pow(strainrate / _dt, 0.15)); 
+  Real energy_release_rate = (ratetoughness * ratetoughness) * (1 - poissons_ratio * poissons_ratio) / youngs_modulus;  
   const Real frac_stress_sqr = cracking_stress * cracking_stress;
   const Real l_max = 2 * energy_release_rate * youngs_modulus / frac_stress_sqr;
 
@@ -74,9 +75,9 @@ ExponentialEnergyBasedSoftening::computeCrackingRelease(Real & stress,
 
   // Compute stress that follows exponental curve
   stress = cracking_stress *
-           (_residual_stress +
-            (1.0 - _residual_stress) * std::exp(initial_slope / cracking_stress *
-                                                (crack_max_strain - crack_initiation_strain)));
+           (_residual_stress + (1.0 - _residual_stress)
+             * std::exp(initial_slope / cracking_stress *
+                       (crack_max_strain - crack_initiation_strain)));
   // Compute ratio of current stiffness to original stiffness
   // stiffness_ratio = youngs_modulus / (stress / crack_max_strain);
   stiffness_ratio = stress * crack_initiation_strain / (crack_max_strain * cracking_stress);
