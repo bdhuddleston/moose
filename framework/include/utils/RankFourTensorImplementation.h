@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -118,15 +118,6 @@ RankFourTensorTempl<T>::zero()
 {
   for (auto i : make_range(N4))
     _vals[i] = 0.0;
-}
-
-template <typename T>
-RankFourTensorTempl<T> &
-RankFourTensorTempl<T>::operator=(const RankFourTensorTempl<T> & a)
-{
-  for (auto i : make_range(N4))
-    _vals[i] = a._vals[i];
-  return *this;
 }
 
 template <typename T>

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -24,14 +24,9 @@ public:
 
   static InputParameters validParams();
 
-  /// Fetch the Rhie Chow user object that
   virtual void linkRhieChowUserObject() override;
 
-  /// Check if the user defined time kernels, if yes error out
-  virtual void checkIntegrity();
-
-  /// Check if the system contains time kernels
-  virtual void checkTimeKernels(NonlinearSystemBase & system);
+  virtual void checkIntegrity() override;
 
   /**
    * Performs the momentum pressure coupling.
@@ -42,6 +37,9 @@ public:
 protected:
   virtual std::vector<std::pair<unsigned int, Real>> solveMomentumPredictor() override;
   virtual std::pair<unsigned int, Real> solvePressureCorrector() override;
+
+  /// Check if the system contains time kernels
+  virtual void checkTimeKernels(NonlinearSystemBase & system);
 
   /// Solve an equation which contains an advection term that depends
   /// on the solution of the segregated Navier-Stokes equations.

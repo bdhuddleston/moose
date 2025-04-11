@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -24,6 +24,9 @@ WCNSLinearFVScalarTransportPhysics::validParams()
                         true,
                         "If the nonorthogonal correction should be used when computing the normal "
                         "gradient, notably in the diffusion term.");
+
+  // Not needed
+  params.suppressParameter<bool>("add_scalar_equation");
   return params;
 }
 
@@ -31,6 +34,9 @@ WCNSLinearFVScalarTransportPhysics::WCNSLinearFVScalarTransportPhysics(
     const InputParameters & parameters)
   : WCNSFVScalarTransportPhysicsBase(parameters)
 {
+  if (_porous_medium_treatment)
+    _flow_equations_physics->paramError("porous_medium_treatment",
+                                        "Porous media scalar advection is currently unimplemented");
 }
 
 void
@@ -66,7 +72,15 @@ WCNSLinearFVScalarTransportPhysics::addSolverVariables()
 void
 WCNSLinearFVScalarTransportPhysics::addScalarTimeKernels()
 {
-  paramError("transient", "Transient simulations are not supported at this time");
+  std::string kernel_type = "LinearFVTimeDerivative";
+  InputParameters params = getFactory().getValidParams(kernel_type);
+  assignBlocks(params, _blocks);
+
+  for (const auto & vname : _passive_scalar_names)
+  {
+    params.set<LinearVariableName>("variable") = vname;
+    getProblem().addLinearFVKernel(kernel_type, prefix() + "ins_" + vname + "_time", params);
+  }
 }
 
 void

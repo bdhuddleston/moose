@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -43,15 +43,6 @@ MOOSEVariableToNEML2Templ<1>::MOOSEVariableToNEML2Templ(const InputParameters & 
 #endif
 {
 }
-
-#ifdef NEML2_ENABLED
-template <unsigned int state>
-torch::Tensor
-MOOSEVariableToNEML2Templ<state>::convertQpMOOSEData() const
-{
-  return NEML2Utils::toNEML2<Real>(_moose_variable[_qp]);
-}
-#endif
 
 template class MOOSEVariableToNEML2Templ<0>;
 template class MOOSEVariableToNEML2Templ<1>;

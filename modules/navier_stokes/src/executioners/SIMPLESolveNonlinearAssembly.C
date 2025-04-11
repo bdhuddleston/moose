@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -10,6 +10,9 @@
 #include "SIMPLESolveNonlinearAssembly.h"
 #include "FEProblem.h"
 #include "SegregatedSolverUtils.h"
+#include "NonlinearSystemBase.h"
+
+#include "libmesh/nonlinear_implicit_system.h"
 
 using namespace libMesh;
 
@@ -228,11 +231,13 @@ SIMPLESolveNonlinearAssembly::SIMPLESolveNonlinearAssembly(Executioner & ex)
           getParam<MultiMooseEnum>("solid_energy_petsc_options");
       const auto & solid_energy_petsc_pair_options = getParam<MooseEnumItem, std::string>(
           "solid_energy_petsc_options_iname", "solid_energy_petsc_options_value");
-      Moose::PetscSupport::processPetscFlags(solid_energy_petsc_options,
-                                             _solid_energy_petsc_options);
-      Moose::PetscSupport::processPetscPairs(solid_energy_petsc_pair_options,
-                                             _problem.mesh().dimension(),
-                                             _solid_energy_petsc_options);
+      Moose::PetscSupport::addPetscFlagsToPetscOptions(
+          solid_energy_petsc_options, "-", *this, _solid_energy_petsc_options);
+      Moose::PetscSupport::addPetscPairsToPetscOptions(solid_energy_petsc_pair_options,
+                                                       _problem.mesh().dimension(),
+                                                       "-",
+                                                       *this,
+                                                       _solid_energy_petsc_options);
 
       _solid_energy_linear_control.real_valued_data["rel_tol"] =
           getParam<Real>("solid_energy_l_tol");
@@ -258,9 +263,13 @@ SIMPLESolveNonlinearAssembly::SIMPLESolveNonlinearAssembly(Executioner & ex)
     const auto & turbulence_petsc_options = getParam<MultiMooseEnum>("turbulence_petsc_options");
     const auto & turbulence_petsc_pair_options = getParam<MooseEnumItem, std::string>(
         "turbulence_petsc_options_iname", "turbulence_petsc_options_value");
-    Moose::PetscSupport::processPetscFlags(turbulence_petsc_options, _turbulence_petsc_options);
-    Moose::PetscSupport::processPetscPairs(
-        turbulence_petsc_pair_options, _problem.mesh().dimension(), _turbulence_petsc_options);
+    Moose::PetscSupport::addPetscFlagsToPetscOptions(
+        turbulence_petsc_options, "-", *this, _turbulence_petsc_options);
+    Moose::PetscSupport::addPetscPairsToPetscOptions(turbulence_petsc_pair_options,
+                                                     _problem.mesh().dimension(),
+                                                     "-",
+                                                     *this,
+                                                     _turbulence_petsc_options);
 
     _turbulence_linear_control.real_valued_data["rel_tol"] = getParam<Real>("turbulence_l_tol");
     _turbulence_linear_control.real_valued_data["abs_tol"] = getParam<Real>("turbulence_l_abs_tol");
@@ -339,7 +348,7 @@ SIMPLESolveNonlinearAssembly::solveMomentumPredictor()
 
     // Very important, for deciding the convergence, we need the unpreconditioned
     // norms in the linear solve
-    LIBMESH_CHKERR(KSPSetNormType(momentum_solver.ksp(), KSP_NORM_UNPRECONDITIONED));
+    LibmeshPetscCall(KSPSetNormType(momentum_solver.ksp(), KSP_NORM_UNPRECONDITIONED));
     // Solve this component. We don't update the ghosted solution yet, that will come at the end
     // of the corrector step. Also setting the linear tolerances and maximum iteration counts.
     _momentum_linear_control.real_valued_data["abs_tol"] = _momentum_l_abs_tol * norm_factor;
@@ -371,7 +380,7 @@ SIMPLESolveNonlinearAssembly::solveMomentumPredictor()
     NonlinearImplicitSystem & momentum_system =
         libMesh::cast_ref<NonlinearImplicitSystem &>(_momentum_systems[system_i]->system());
     _momentum_systems[system_i]->setSolution(*(momentum_system.current_local_solution));
-    _momentum_systems[system_i]->copySolutionsBackwards();
+    _momentum_systems[system_i]->copyPreviousNonlinearSolutions();
   }
 
   return its_normalized_residuals;
@@ -413,7 +422,7 @@ SIMPLESolveNonlinearAssembly::solvePressureCorrector()
   Real norm_factor = NS::FV::computeNormalizationFactor(solution, mmat, rhs);
 
   // We need the non-preconditioned norm to be consistent with the norm factor
-  LIBMESH_CHKERR(KSPSetNormType(pressure_solver.ksp(), KSP_NORM_UNPRECONDITIONED));
+  LibmeshPetscCall(KSPSetNormType(pressure_solver.ksp(), KSP_NORM_UNPRECONDITIONED));
 
   // Setting the linear tolerances and maximum iteration counts
   _pressure_linear_control.real_valued_data["abs_tol"] = _pressure_l_abs_tol * norm_factor;
@@ -486,7 +495,7 @@ SIMPLESolveNonlinearAssembly::solveAdvectedSystem(const unsigned int system_num,
   Real norm_factor = NS::FV::computeNormalizationFactor(solution, mmat, rhs);
 
   // We need the non-preconditioned norm to be consistent with the norm factor
-  LIBMESH_CHKERR(KSPSetNormType(linear_solver.ksp(), KSP_NORM_UNPRECONDITIONED));
+  LibmeshPetscCall(KSPSetNormType(linear_solver.ksp(), KSP_NORM_UNPRECONDITIONED));
 
   // Setting the linear tolerances and maximum iteration counts
   solver_config.real_valued_data["abs_tol"] = absolute_tol * norm_factor;
@@ -546,7 +555,7 @@ SIMPLESolveNonlinearAssembly::solveSolidEnergySystem()
   Real norm_factor = NS::FV::computeNormalizationFactor(solution, mat, rhs);
 
   // We need the non-preconditioned norm to be consistent with the norm factor
-  LIBMESH_CHKERR(KSPSetNormType(se_solver.ksp(), KSP_NORM_UNPRECONDITIONED));
+  LibmeshPetscCall(KSPSetNormType(se_solver.ksp(), KSP_NORM_UNPRECONDITIONED));
 
   // Setting the linear tolerances and maximum iteration counts
   _solid_energy_linear_control.real_valued_data["abs_tol"] = _solid_energy_l_abs_tol * norm_factor;

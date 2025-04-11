@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -250,6 +250,12 @@ public:
 
   /// Whether or not this problem has the variable
   virtual bool hasVariable(const std::string & var_name) const = 0;
+
+  /// Whether or not this problem has this linear variable
+  virtual bool hasLinearVariable(const std::string & var_name) const;
+
+  /// Whether or not this problem has this auxiliary variable
+  virtual bool hasAuxiliaryVariable(const std::string & var_name) const;
 
   /**
    * Returns the variable reference for requested variable which must
@@ -988,15 +994,12 @@ public:
   virtual bool hasNonlocalCoupling() const = 0;
 
   /**
-   * Indicate whether the kind of adaptivity we're doing is p-refinement
-   * @param doing_p_refinement Whether we're doing p-refinement
-   * @param disable_p_refinement_for_families Families to disable p-refinement for
+   * Prepare \p DofMap and \p Assembly classes with our p-refinement information
    */
-  virtual void doingPRefinement(bool doing_p_refinement,
-                                const MultiMooseEnum & disable_p_refinement_for_families);
+  void preparePRefinement();
 
   /**
-   * @returns whether the kind of adaptivity we're doing is p-refinement
+   * @returns whether we're doing p-refinement
    */
   [[nodiscard]] bool doingPRefinement() const;
 
@@ -1027,6 +1030,12 @@ protected:
    * Verify the integrity of _vector_tags and _typed_vector_tags
    */
   bool verifyVectorTags() const;
+
+  /**
+   * Mark a variable family for either disabling or enabling p-refinement with valid parameters of a
+   * variable
+   */
+  void markFamilyPRefinement(const InputParameters & params);
 
   /// The currently declared tags
   std::map<TagName, TagID> _matrix_tag_name_to_tag_id;
@@ -1197,6 +1206,11 @@ private:
   /// Whether p-refinement has been requested at any point during the simulation
   bool _have_p_refinement;
 
+  /// Indicate whether a family is disabled for p-refinement
+  std::unordered_map<FEFamily, bool> _family_for_p_refinement;
+  /// The set of variable families by default disable p-refinement
+  static const std::unordered_set<FEFamily> _default_families_without_p_refinement;
+
   friend class Restartable;
 };
 
@@ -1252,8 +1266,10 @@ SubProblem::getFunctor(const std::string & name,
         mooseError("We already have the functor; it should not be unset");
 
       // Check for whether this is a valid request
+      // We allow auxiliary variables and linear variables to be retrieved as non AD
       if (!requested_functor_is_ad && requestor_is_ad &&
-          true_functor_is == SubProblem::TrueFunctorIs::AD)
+          true_functor_is == SubProblem::TrueFunctorIs::AD &&
+          !(hasAuxiliaryVariable(name) || hasLinearVariable(name)))
         mooseError("The AD object '",
                    requestor_name,
                    "' is requesting the functor '",

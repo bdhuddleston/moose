@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -367,8 +367,9 @@ FEProblemBase::validParams()
   params.addParamNamesToGroup(
       "null_space_dimension transpose_null_space_dimension near_null_space_dimension",
       "Null space removal");
-  params.addParamNamesToGroup("extra_tag_vectors extra_tag_matrices extra_tag_solutions",
-                              "Tagging");
+  params.addParamNamesToGroup(
+      "extra_tag_vectors extra_tag_matrices extra_tag_solutions not_zeroed_tag_vectors",
+      "Contribution to tagged field data");
   params.addParamNamesToGroup(
       "allow_invalid_solution show_invalid_solution_console immediately_print_invalid_solution",
       "Solution validity control");
@@ -470,6 +471,7 @@ FEProblemBase::FEProblemBase(const InputParameters & parameters)
     _is_petsc_options_inserted(false),
     _line_search(nullptr),
     _using_ad_mat_props(false),
+    _current_ic_state(0),
     _error_on_jacobian_nonzero_reallocation(
         isParamValid("error_on_jacobian_nonzero_reallocation")
             ? getParam<bool>("error_on_jacobian_nonzero_reallocation")
@@ -500,6 +502,10 @@ FEProblemBase::FEProblemBase(const InputParameters & parameters)
   //  We will toggle this to false when doing residual evaluations
   ADReal::do_derivatives = true;
 
+  _solver_params.reserve(_num_nl_sys + _num_linear_sys);
+  // Default constructor fine for nonlinear because it will be populated later by framework
+  // executioner/solve object parameters
+  _solver_params.resize(_num_nl_sys);
   for (const auto i : index_range(_nl_sys_names))
   {
     const auto & name = _nl_sys_names[i];
@@ -514,6 +520,8 @@ FEProblemBase::FEProblemBase(const InputParameters & parameters)
     _linear_sys_name_to_num[name] = i;
     _solver_sys_name_to_num[name] = i + _num_nl_sys;
     _solver_sys_names.push_back(name);
+    // Unlike for nonlinear these are basically dummy parameters
+    _solver_params.push_back(makeLinearSolverParams());
   }
 
   _nonlocal_cm.resize(_nl_sys_names.size());
@@ -587,10 +595,7 @@ FEProblemBase::FEProblemBase(const InputParameters & parameters)
 #if !PETSC_RELEASE_LESS_THAN(3, 12, 0)
   // Main app should hold the default database to handle system petsc options
   if (!_app.isUltimateMaster())
-  {
-    auto ierr = PetscOptionsCreate(&_petsc_option_data_base);
-    LIBMESH_CHKERR(ierr);
-  }
+    LibmeshPetscCall(PetscOptionsCreate(&_petsc_option_data_base));
 #endif
 
   if (!_solve)
@@ -1136,6 +1141,59 @@ FEProblemBase::initialSetup()
   {
     // During initial setup the solution is copied to the older solution states (old, older, etc)
     copySolutionsBackwards();
+
+    // Check if there are old state initial conditions
+    auto ics = _ics.getActiveObjects();
+    auto fv_ics = _fv_ics.getActiveObjects();
+    auto scalar_ics = _scalar_ics.getActiveObjects();
+    unsigned short ic_state_max = 0;
+
+    auto findMax = [&ic_state_max](const auto & obj_list)
+    {
+      for (auto ic : obj_list.getActiveObjects())
+        ic_state_max = std::max(ic_state_max, ic->getState());
+    };
+    findMax(_ics);
+    findMax(_fv_ics);
+    findMax(_scalar_ics);
+
+    // if there are old state ICs, compute them and write to old states accordingly
+    if (ic_state_max > 0)
+    {
+      // state 0 copy (we'll overwrite current state when evaluating ICs and need to restore it once
+      // we're done with the old/older state ICs)
+      std::vector<std::unique_ptr<NumericVector<Real>>> state0_sys_buffers(_solver_systems.size());
+      std::unique_ptr<NumericVector<Real>> state0_aux_buffer;
+
+      // save state 0
+      for (const auto i : index_range(_solver_systems))
+        state0_sys_buffers[i] = _solver_systems[i]->solutionState(0).clone();
+
+      state0_aux_buffer = _aux->solutionState(0).clone();
+
+      // compute old state ICs
+      for (_current_ic_state = 1; _current_ic_state <= ic_state_max; _current_ic_state++)
+      {
+        projectSolution();
+
+        for (auto & sys : _solver_systems)
+          sys->solutionState(_current_ic_state) = sys->solutionState(0);
+
+        _aux->solutionState(_current_ic_state) = _aux->solutionState(0);
+      }
+      _current_ic_state = 0;
+
+      // recover state 0
+      for (const auto i : index_range(_solver_systems))
+      {
+        _solver_systems[i]->solutionState(0) = *state0_sys_buffers[i];
+        _solver_systems[i]->solutionState(0).close();
+        _solver_systems[i]->update();
+      }
+      _aux->solutionState(0) = *state0_aux_buffer;
+      _aux->solutionState(0).close();
+      _aux->update();
+    }
   }
 
   if (!_app.isRecovering())
@@ -2273,8 +2331,8 @@ FEProblemBase::reinitElemNeighborAndLowerD(const Elem * elem,
     {
       auto qps = _assembly[tid][0]->qPointsFaceNeighbor().stdVector();
       std::vector<Point> reference_points;
-      FEInterface::inverse_map(
-          lower_d_elem_neighbor->dim(), FEType(), lower_d_elem_neighbor, qps, reference_points);
+      FEMap::inverse_map(
+          lower_d_elem_neighbor->dim(), lower_d_elem_neighbor, qps, reference_points);
       reinitLowerDElem(lower_d_elem_neighbor, tid, &reference_points);
     }
   }
@@ -2372,7 +2430,6 @@ void
 FEProblemBase::subdomainSetup(SubdomainID subdomain, const THREAD_ID tid)
 {
   _all_materials.subdomainSetup(subdomain, tid);
-
   // Call the subdomain methods of the output system, these are not threaded so only call it once
   if (tid == 0)
     _app.getOutputWarehouse().subdomainSetup();
@@ -2730,8 +2787,9 @@ FEProblemBase::addVariable(const std::string & var_type,
 {
   parallel_object_only();
 
-  auto fe_type = FEType(Utility::string_to_enum<Order>(params.get<MooseEnum>("order")),
-                        Utility::string_to_enum<FEFamily>(params.get<MooseEnum>("family")));
+  const auto order = Utility::string_to_enum<Order>(params.get<MooseEnum>("order"));
+  const auto family = Utility::string_to_enum<FEFamily>(params.get<MooseEnum>("family"));
+  const auto fe_type = FEType(order, family);
 
   const auto active_subdomains_vector =
       _mesh.getSubdomainIDs(params.get<std::vector<SubdomainName>>("block"));
@@ -2753,6 +2811,8 @@ FEProblemBase::addVariable(const std::string & var_type,
     _displaced_problem->addVariable(var_type, var_name, params, solver_system_number);
 
   _solver_var_to_sys_num[var_name] = solver_system_number;
+
+  markFamilyPRefinement(params);
 }
 
 std::pair<bool, unsigned int>
@@ -3011,8 +3071,9 @@ FEProblemBase::addAuxVariable(const std::string & var_type,
 {
   parallel_object_only();
 
-  auto fe_type = FEType(Utility::string_to_enum<Order>(params.get<MooseEnum>("order")),
-                        Utility::string_to_enum<FEFamily>(params.get<MooseEnum>("family")));
+  const auto order = Utility::string_to_enum<Order>(params.get<MooseEnum>("order"));
+  const auto family = Utility::string_to_enum<FEFamily>(params.get<MooseEnum>("family"));
+  const auto fe_type = FEType(order, family);
 
   const auto active_subdomains_vector =
       _mesh.getSubdomainIDs(params.get<std::vector<SubdomainName>>("block"));
@@ -3030,6 +3091,8 @@ FEProblemBase::addAuxVariable(const std::string & var_type,
   if (_displaced_problem)
     // MooseObjects need to be unique so change the name here
     _displaced_problem->addAuxVariable(var_type, var_name, params);
+
+  markFamilyPRefinement(params);
 }
 
 void
@@ -3068,6 +3131,8 @@ FEProblemBase::addAuxVariable(const std::string & var_name,
   _aux->addVariable(var_type, var_name, params);
   if (_displaced_problem)
     _displaced_problem->addAuxVariable("MooseVariable", var_name, params);
+
+  markFamilyPRefinement(params);
 }
 
 void
@@ -3098,6 +3163,8 @@ FEProblemBase::addAuxArrayVariable(const std::string & var_name,
   _aux->addVariable("ArrayMooseVariable", var_name, params);
   if (_displaced_problem)
     _displaced_problem->addAuxVariable("ArrayMooseVariable", var_name, params);
+
+  markFamilyPRefinement(params);
 }
 
 void
@@ -4087,17 +4154,26 @@ FEProblemBase::addObjectParamsHelper(InputParameters & parameters,
                                      const std::string & object_name,
                                      const std::string & var_param_name)
 {
-  const auto solver_sys_num =
-      parameters.isParamValid(var_param_name) &&
-              determineSolverSystem(parameters.varName(var_param_name, object_name)).first
-          ? determineSolverSystem(parameters.varName(var_param_name, object_name)).second
-          : (unsigned int)0;
+  // Due to objects like SolutionUserObject which manipulate libmesh objects
+  // and variables directly at the back end, we need a default option here
+  // which is going to be the pointer to the first solver system within this
+  // problem
+  unsigned int sys_num = 0;
+  if (parameters.isParamValid(var_param_name))
+  {
+    const auto variable_name = parameters.varName(var_param_name, object_name);
+    if (this->hasVariable(variable_name) || this->hasScalarVariable(variable_name))
+      sys_num = getSystem(parameters.varName(var_param_name, object_name)).number();
+  }
 
   if (_displaced_problem && parameters.have_parameter<bool>("use_displaced_mesh") &&
       parameters.get<bool>("use_displaced_mesh"))
   {
     parameters.set<SubProblem *>("_subproblem") = _displaced_problem.get();
-    parameters.set<SystemBase *>("_sys") = &_displaced_problem->solverSys(solver_sys_num);
+    if (sys_num == _aux->number())
+      parameters.set<SystemBase *>("_sys") = &_displaced_problem->systemBaseAuxiliary();
+    else
+      parameters.set<SystemBase *>("_sys") = &_displaced_problem->solverSys(sys_num);
   }
   else
   {
@@ -4109,7 +4185,11 @@ FEProblemBase::addObjectParamsHelper(InputParameters & parameters,
       parameters.set<bool>("use_displaced_mesh") = false;
 
     parameters.set<SubProblem *>("_subproblem") = this;
-    parameters.set<SystemBase *>("_sys") = _solver_systems[solver_sys_num].get();
+
+    if (sys_num == _aux->number())
+      parameters.set<SystemBase *>("_sys") = _aux.get();
+    else
+      parameters.set<SystemBase *>("_sys") = _solver_systems[sys_num].get();
   }
 }
 
@@ -4210,20 +4290,19 @@ FEProblemBase::addUserObject(const std::string & user_object_name,
       break;
   }
 
-  // Add as a Functor if it is one
-  // At the timing of adding this, this is only Postprocessors... but technically it
-  // should enable any UO that is a Real Functor to be used as one
-  // The ternary operator used in getting the functor is there because some UOs
-  // are threaded and some are not. When a UO is not threaded, we need to add
-  // the functor from thread 0 as the registered functor for all threads
+  // Add as a Functor if it is one. We usually need to add the user object from thread 0 as the
+  // registered functor for all threads because when user objects are thread joined, generally only
+  // the primary thread copy ends up with all the data
   for (const auto tid : make_range(libMesh::n_threads()))
-    if (const auto functor =
-            dynamic_cast<Moose::FunctorBase<Real> *>(uos[uos.size() == 1 ? 0 : tid].get()))
+  {
+    const decltype(uos)::size_type uo_index = uos.front()->needThreadedCopy() ? tid : 0;
+    if (const auto functor = dynamic_cast<Moose::FunctorBase<Real> *>(uos[uo_index].get()))
     {
       this->addFunctor(name, *functor, tid);
       if (_displaced_problem)
         _displaced_problem->addFunctor(name, *functor, tid);
     }
+  }
 
   return uos;
 }
@@ -5539,6 +5618,16 @@ FEProblemBase::hasVariable(const std::string & var_name) const
   return false;
 }
 
+bool
+FEProblemBase::hasSolverVariable(const std::string & var_name) const
+{
+  for (auto & sys : _solver_systems)
+    if (sys->hasVariable(var_name))
+      return true;
+
+  return false;
+}
+
 const MooseVariableFieldBase &
 FEProblemBase::getVariable(const THREAD_ID tid,
                            const std::string & var_name,
@@ -5627,7 +5716,7 @@ FEProblemBase::getSystem(const std::string & var_name)
   const auto [var_in_sys, sys_num] = determineSolverSystem(var_name);
   if (var_in_sys)
     return _solver_systems[sys_num]->system();
-  else if (_aux->hasVariable(var_name))
+  else if (_aux->hasVariable(var_name) || _aux->hasScalarVariable(var_name))
     return _aux->system();
   else
     mooseError("Unable to find a system containing the variable " + var_name);
@@ -6090,9 +6179,16 @@ FEProblemBase::init()
   if (_displaced_problem)
     _displaced_mesh->meshChanged();
 
+  if (_mesh.doingPRefinement())
+  {
+    preparePRefinement();
+    if (_displaced_problem)
+      _displaced_problem->preparePRefinement();
+  }
+
   // do not assemble system matrix for JFNK solve
   for (auto & nl : _nl)
-    if (solverParams()._type == Moose::ST_JFNK)
+    if (solverParams(nl->number())._type == Moose::ST_JFNK)
       nl->turnOffJacobian();
 
   for (auto & sys : _solver_systems)
@@ -6214,6 +6310,10 @@ FEProblemBase::solve(const unsigned int nl_sys_num)
   if (_displaced_problem)
     _displaced_problem->clearAllDofIndices();
 
+  // Setup the output system for printing linear/nonlinear iteration information and some solver
+  // settings, including setting matrix prefixes. This must occur before petscSetOptions
+  initPetscOutputAndSomeSolverSettings();
+
 #if PETSC_RELEASE_LESS_THAN(3, 12, 0)
   Moose::PetscSupport::petscSetOptions(
       _petsc_options, _solver_params); // Make sure the PETSc options are setup for this app
@@ -6221,13 +6321,11 @@ FEProblemBase::solve(const unsigned int nl_sys_num)
   // Now this database will be the default
   // Each app should have only one database
   if (!_app.isUltimateMaster())
-  {
-    auto ierr = PetscOptionsPush(_petsc_option_data_base);
-    LIBMESH_CHKERR(ierr);
-  }
+    LibmeshPetscCall(PetscOptionsPush(_petsc_option_data_base));
   // We did not add PETSc options to database yet
   if (!_is_petsc_options_inserted)
   {
+    // Insert options for all systems all at once
     Moose::PetscSupport::petscSetOptions(_petsc_options, _solver_params, this);
     _is_petsc_options_inserted = true;
   }
@@ -6237,10 +6335,6 @@ FEProblemBase::solve(const unsigned int nl_sys_num)
   // We need to setup DM every "solve()" because libMesh destroy SNES after solve()
   // Do not worry, DM setup is very cheap
   _current_nl_sys->setupDM();
-
-  // Setup the output system for printing linear/nonlinear iteration information and some solver
-  // settings
-  initPetscOutputAndSomeSolverSettings();
 
   possiblyRebuildGeomSearchPatches();
 
@@ -6261,10 +6355,7 @@ FEProblemBase::solve(const unsigned int nl_sys_num)
 
 #if !PETSC_RELEASE_LESS_THAN(3, 12, 0)
   if (!_app.isUltimateMaster())
-  {
-    auto ierr = PetscOptionsPop();
-    LIBMESH_CHKERR(ierr);
-  }
+    LibmeshPetscCall(PetscOptionsPop());
 #endif
 }
 
@@ -6373,22 +6464,17 @@ FEProblemBase::solveLinearSystem(const unsigned int linear_sys_num,
   setCurrentLinearSystem(linear_sys_num);
 
   const Moose::PetscSupport::PetscOptions & options = po ? *po : _petsc_options;
-  SolverParams solver_params;
-  solver_params._type = Moose::SolveType::ST_LINEAR;
-  solver_params._line_search = Moose::LineSearchType::LS_NONE;
+  auto & solver_params = _solver_params[numNonlinearSystems() + linear_sys_num];
 
 #if PETSC_RELEASE_LESS_THAN(3, 12, 0)
-  auto ierr = Moose::PetscSupport::petscSetOptions(
-      options, solver_params); // Make sure the PETSc options are setup for this app
-  LIBMESH_CHKERR(ierr);
+  LibmeshPetscCall(Moose::PetscSupport::petscSetOptions(
+      options, solver_params)); // Make sure the PETSc options are setup for this app
 #else
   // Now this database will be the default
   // Each app should have only one database
   if (!_app.isUltimateMaster())
-  {
-    auto ierr = PetscOptionsPush(_petsc_option_data_base);
-    LIBMESH_CHKERR(ierr);
-  }
+    LibmeshPetscCall(PetscOptionsPush(_petsc_option_data_base));
+
   // We did not add PETSc options to database yet
   if (!_is_petsc_options_inserted)
   {
@@ -6402,10 +6488,7 @@ FEProblemBase::solveLinearSystem(const unsigned int linear_sys_num,
 
 #if !PETSC_RELEASE_LESS_THAN(3, 12, 0)
   if (!_app.isUltimateMaster())
-  {
-    auto ierr = PetscOptionsPop();
-    LIBMESH_CHKERR(ierr);
-  }
+    LibmeshPetscCall(PetscOptionsPop());
 #endif
 }
 
@@ -6457,13 +6540,13 @@ FEProblemBase::advanceState()
 {
   TIME_SECTION("advanceState", 5, "Advancing State");
 
-  for (auto & nl : _nl)
-    nl->copyOldSolutions();
+  for (auto & sys : _solver_systems)
+    sys->copyOldSolutions();
   _aux->copyOldSolutions();
 
   if (_displaced_problem)
   {
-    for (const auto i : index_range(_nl))
+    for (const auto i : index_range(_solver_systems))
       _displaced_problem->solverSys(i).copyOldSolutions();
     _displaced_problem->auxSys().copyOldSolutions();
   }
@@ -8151,10 +8234,14 @@ FEProblemBase::checkProblemIntegrity()
         std::copy(local_mesh_subs.begin(),
                   local_mesh_subs.end(),
                   std::ostream_iterator<unsigned int>(extra_subdomain_ids, " "));
+        /// vector is necessary to get the subdomain names
+        std::vector<SubdomainID> local_mesh_subs_vec(local_mesh_subs.begin(),
+                                                     local_mesh_subs.end());
 
         mooseError("The following blocks from your input mesh do not contain an active material: " +
                    extra_subdomain_ids.str() +
-                   "\nWhen ANY mesh block contains a Material object, "
+                   "(names: " + Moose::stringify(_mesh.getSubdomainNames(local_mesh_subs_vec)) +
+                   ")\nWhen ANY mesh block contains a Material object, "
                    "all blocks must contain a Material object.\n");
       }
     }
@@ -8431,15 +8518,18 @@ FEProblemBase::getVariableNames()
 }
 
 SolverParams &
-FEProblemBase::solverParams()
+FEProblemBase::solverParams(const unsigned int solver_sys_num)
 {
-  return _solver_params;
+  mooseAssert(solver_sys_num < numSolverSystems(),
+              "Solver system number '" << solver_sys_num << "' is out of bounds. We have '"
+                                       << numSolverSystems() << "' solver systems");
+  return _solver_params[solver_sys_num];
 }
 
 const SolverParams &
-FEProblemBase::solverParams() const
+FEProblemBase::solverParams(const unsigned int solver_sys_num) const
 {
-  return _solver_params;
+  return const_cast<FEProblemBase *>(this)->solverParams(solver_sys_num);
 }
 
 void
@@ -8651,6 +8741,24 @@ FEProblemBase::haveADObjects(const bool have_ad_objects)
 }
 
 const SystemBase &
+FEProblemBase::getSystemBase(const unsigned int sys_num) const
+{
+  if (sys_num < _solver_systems.size())
+    return *_solver_systems[sys_num];
+
+  return *_aux;
+}
+
+SystemBase &
+FEProblemBase::getSystemBase(const unsigned int sys_num)
+{
+  if (sys_num < _solver_systems.size())
+    return *_solver_systems[sys_num];
+
+  return *_aux;
+}
+
+const SystemBase &
 FEProblemBase::systemBaseNonlinear(const unsigned int sys_num) const
 {
   mooseAssert(sys_num < _nl.size(), "System number greater than the number of nonlinear systems");
@@ -8778,15 +8886,15 @@ FEProblemBase::getFVMatsAndDependencies(
     for (std::shared_ptr<MaterialBase> face_mat : this_face_mats)
       if (face_mat->ghostable())
       {
-        mooseAssert(!face_mat->hasStatefulProperties(),
-                    "Finite volume materials do not currently support stateful properties.");
         face_materials.push_back(face_mat);
         auto & var_deps = face_mat->getMooseVariableDependencies();
         for (auto * var : var_deps)
         {
-          mooseAssert(
-              var->isFV(),
-              "Ghostable materials should only have finite volume variables coupled into them.");
+          if (!var->isFV())
+            mooseError(
+                "Ghostable materials should only have finite volume variables coupled into them.");
+          else if (face_mat->hasStatefulProperties())
+            mooseError("Finite volume materials do not currently support stateful properties.");
           variables.insert(var);
         }
       }
@@ -8799,16 +8907,16 @@ FEProblemBase::getFVMatsAndDependencies(
     for (std::shared_ptr<MaterialBase> neighbor_mat : this_neighbor_mats)
       if (neighbor_mat->ghostable())
       {
-        mooseAssert(!neighbor_mat->hasStatefulProperties(),
-                    "Finite volume materials do not currently support stateful properties.");
         neighbor_materials.push_back(neighbor_mat);
 #ifndef NDEBUG
         auto & var_deps = neighbor_mat->getMooseVariableDependencies();
         for (auto * var : var_deps)
         {
-          mooseAssert(
-              var->isFV(),
-              "Ghostable materials should only have finite volume variables coupled into them.");
+          if (!var->isFV())
+            mooseError(
+                "Ghostable materials should only have finite volume variables coupled into them.");
+          else if (neighbor_mat->hasStatefulProperties())
+            mooseError("Finite volume materials do not currently support stateful properties.");
           auto pr = variables.insert(var);
           mooseAssert(!pr.second,
                       "We should not have inserted any new variables dependencies from our "
@@ -8961,15 +9069,6 @@ FEProblemBase::reinitMortarUserObjects(const BoundaryID primary_boundary_id,
 }
 
 void
-FEProblemBase::doingPRefinement(const bool doing_p_refinement,
-                                const MultiMooseEnum & disable_p_refinement_for_families)
-{
-  SubProblem::doingPRefinement(doing_p_refinement, disable_p_refinement_for_families);
-  if (_displaced_problem)
-    _displaced_problem->doingPRefinement(doing_p_refinement, disable_p_refinement_for_families);
-}
-
-void
 FEProblemBase::setVerboseProblem(bool verbose)
 {
   _verbose_setup = verbose ? "true" : "false";
@@ -9081,4 +9180,25 @@ FEProblemBase::setCurrentAlgebraicBndNodeRange(ConstBndNodeRange * range)
   }
 
   _current_algebraic_bnd_node_range = std::make_unique<ConstBndNodeRange>(*range);
+}
+
+unsigned short
+FEProblemBase::getCurrentICState()
+{
+  return _current_ic_state;
+}
+
+std::string
+FEProblemBase::solverTypeString(const unsigned int solver_sys_num)
+{
+  return Moose::stringify(solverParams(solver_sys_num)._type);
+}
+
+SolverParams
+FEProblemBase::makeLinearSolverParams()
+{
+  SolverParams solver_params;
+  solver_params._type = Moose::SolveType::ST_LINEAR;
+  solver_params._line_search = Moose::LineSearchType::LS_NONE;
+  return solver_params;
 }

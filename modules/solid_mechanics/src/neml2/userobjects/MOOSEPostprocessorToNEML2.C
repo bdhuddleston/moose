@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -50,7 +50,7 @@ template <unsigned int state>
 neml2::Tensor
 MOOSEPostprocessorToNEML2Templ<state>::gatheredData() const
 {
-  return NEML2Utils::toNEML2<Real>(_moose_pp);
+  return neml2::Scalar::full(_moose_pp);
 }
 #endif
 

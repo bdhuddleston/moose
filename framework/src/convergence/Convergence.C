@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -19,6 +19,7 @@ Convergence::validParams()
   params += SetupInterface::validParams();
   params += PostprocessorInterface::validParams();
   params += PerfGraphInterface::validParams();
+  params += TransientInterface::validParams();
 
   params.addParam<bool>(
       "verbose",
@@ -35,7 +36,9 @@ Convergence::Convergence(const InputParameters & parameters)
     SetupInterface(this),
     PostprocessorInterface(this),
     PerfGraphInterface(this),
+    TransientInterface(this),
     _perfid_check_convergence(registerTimedSection("checkConvergence", 5, "Checking Convergence")),
+    _tid(getParam<THREAD_ID>("_tid")),
     _verbose(getParam<bool>("verbose") ? true : getMooseApp().getExecutioner()->verbose())
 {
 }

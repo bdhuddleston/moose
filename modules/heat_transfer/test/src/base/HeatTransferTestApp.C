@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -44,7 +44,7 @@ HeatTransferTestApp::registerAll(Factory & f, ActionFactory & af, Syntax & s, bo
 void
 HeatTransferTestApp::registerApps()
 {
-  registerApp(HeatTransferApp);
+  HeatTransferApp::registerApps();
   registerApp(HeatTransferTestApp);
 }
 

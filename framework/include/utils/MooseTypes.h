@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -373,6 +373,7 @@ typedef MooseArray<ADRealTensorValue> ADVariableSecond;
 typedef MooseArray<ADRealVectorValue> ADVectorVariableValue;
 typedef MooseArray<ADRealTensorValue> ADVectorVariableGradient;
 typedef MooseArray<libMesh::TypeNTensor<3, ADReal>> ADVectorVariableSecond;
+typedef MooseArray<ADRealVectorValue> ADVectorVariableCurl;
 
 namespace Moose
 {
@@ -581,7 +582,7 @@ struct IsADType<MetaPhysicL::DualNumber<T, Args...>>
  * error with constexpr-based if conditions. The templating delays the triggering
  * of the static assertion until the template is instantiated.
  */
-template <class T>
+template <class... Ts>
 constexpr std::false_type always_false{};
 
 } // namespace Moose
@@ -602,6 +603,8 @@ using ADTemplateVariableGradient =
 template <typename T>
 using ADTemplateVariableSecond =
     typename OutputTools<typename Moose::ADType<T>::type>::VariableSecond;
+template <typename T>
+using ADTemplateVariableCurl = typename OutputTools<typename Moose::ADType<T>::type>::VariableCurl;
 
 typedef VariableTestValue ADVariableTestValue;
 typedef VariableTestGradient ADVariableTestGradient;

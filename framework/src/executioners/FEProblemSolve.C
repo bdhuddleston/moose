@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -13,6 +13,7 @@
 #include "NonlinearSystemBase.h"
 #include "LinearSystem.h"
 #include "Convergence.h"
+#include "Executioner.h"
 
 std::set<std::string> const FEProblemSolve::_moose_line_searches = {"contact", "project"};
 
@@ -48,9 +49,10 @@ FEProblemSolve::feProblemDefaultConvergenceParams()
                                 "before requesting halting the current evaluation and requesting "
                                 "timestep cut for transient simulations");
 
-  params.addParamNamesToGroup("nl_max_its nl_forced_its nl_max_funcs nl_abs_tol nl_rel_tol "
-                              "nl_rel_step_tol nl_div_tol nl_abs_div_tol n_max_nonlinear_pingpong",
-                              "Nonlinear Solver");
+  params.addParamNamesToGroup(
+      "nl_max_its nl_forced_its nl_max_funcs nl_abs_tol nl_rel_tol "
+      "nl_rel_step_tol nl_abs_step_tol nl_div_tol nl_abs_div_tol n_max_nonlinear_pingpong",
+      "Nonlinear Solver");
 
   return params;
 }
@@ -195,7 +197,7 @@ FEProblemSolve::validParams()
                               "reuse_preconditioner_max_linear_its",
                               "Linear Solver");
   params.addParamNamesToGroup(
-      "solve_type nl_abs_step_tol snesmf_reuse_base use_pre_SMO_residual "
+      "solve_type snesmf_reuse_base use_pre_SMO_residual "
       "num_grids residual_and_jacobian_together splitting nonlinear_convergence",
       "Nonlinear Solver");
   params.addParamNamesToGroup(
@@ -214,7 +216,7 @@ FEProblemSolve::validParams()
 
 FEProblemSolve::FEProblemSolve(Executioner & ex)
   : MultiSystemSolveObject(ex),
-    _num_grid_steps(getParam<unsigned int>("num_grids") - 1),
+    _num_grid_steps(cast_int<unsigned int>(getParam<unsigned int>("num_grids") - 1)),
     _using_multi_sys_fp_iterations(getParam<bool>("multi_system_fixed_point")),
     _multi_sys_fp_convergence(nullptr) // has not been created yet
 {
@@ -222,8 +224,21 @@ FEProblemSolve::FEProblemSolve(Executioner & ex)
       _moose_line_searches.end())
     _problem.addLineSearch(_pars);
 
+  auto set_solver_params = [this, &ex](const SolverSystem & sys)
+  {
+    const auto prefix = sys.prefix();
+    Moose::PetscSupport::storePetscOptions(_problem, prefix, ex);
+    Moose::PetscSupport::setConvergedReasonFlags(_problem, prefix);
+
+    // Set solver parameter prefix and system number
+    auto & solver_params = _problem.solverParams(sys.number());
+    solver_params._prefix = prefix;
+    solver_params._solver_sys_num = sys.number();
+  };
+
   // Extract and store PETSc related settings on FEProblemBase
-  Moose::PetscSupport::storePetscOptions(_problem, _pars);
+  for (const auto * const sys : _systems)
+    set_solver_params(*sys);
 
   // Set linear solve parameters in the equation system
   // Nonlinear solve parameters are added in the DefaultNonlinearConvergence
@@ -254,7 +269,10 @@ FEProblemSolve::FEProblemSolve(Executioner & ex)
   // Check whether the user has explicitly requested automatic scaling and is using a solve type
   // without a matrix. If so, then we warn them
   if ((_pars.isParamSetByUser("automatic_scaling") && getParam<bool>("automatic_scaling")) &&
-      _problem.solverParams()._type == Moose::ST_JFNK)
+      std::all_of(_systems.begin(),
+                  _systems.end(),
+                  [this](const auto & solver_sys)
+                  { return _problem.solverParams(solver_sys->number())._type == Moose::ST_JFNK; }))
   {
     paramWarning("automatic_scaling",
                  "Automatic scaling isn't implemented for the case where you do not have a "
@@ -264,10 +282,16 @@ FEProblemSolve::FEProblemSolve(Executioner & ex)
   else
     // Check to see whether automatic_scaling has been specified anywhere, including at the
     // application level. No matter what: if we don't have a matrix, we don't do scaling
-    _problem.automaticScaling((isParamValid("automatic_scaling")
-                                   ? getParam<bool>("automatic_scaling")
-                                   : getMooseApp().defaultAutomaticScaling()) &&
-                              (_problem.solverParams()._type != Moose::ST_JFNK));
+    _problem.automaticScaling(
+        isParamValid("automatic_scaling")
+            ? getParam<bool>("automatic_scaling")
+            : (getMooseApp().defaultAutomaticScaling() &&
+               std::any_of(_systems.begin(),
+                           _systems.end(),
+                           [this](const auto & solver_sys) {
+                             return _problem.solverParams(solver_sys->number())._type !=
+                                    Moose::ST_JFNK;
+                           })));
 
   if (!_using_multi_sys_fp_iterations && isParamValid("multi_system_fixed_point_convergence"))
     paramError("multi_system_fixed_point_convergence",

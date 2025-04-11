@@ -1,5 +1,5 @@
 #* This file is part of the MOOSE framework
-#* https://www.mooseframework.org
+#* https://mooseframework.inl.gov
 #*
 #* All rights reserved, see COPYRIGHT for full restrictions
 #* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -306,7 +306,14 @@ class Job(OutputInterface):
 
     def getRunnable(self):
         """ Wrapper method to return getRunnable """
-        return self.__tester.getRunnable(self.options)
+        try:
+            runnable = self.__tester.getRunnable(self.options)
+        except:
+            trace = traceback.format_exc()
+            self.setStatus(self.error, 'TESTER EXCEPTION')
+            self.appendOutput(util.outputHeader('Python exception encountered') + trace)
+            return False
+        return runnable
 
     def getOutputFiles(self, options):
         """ Wrapper method to return getOutputFiles (absolute path) """

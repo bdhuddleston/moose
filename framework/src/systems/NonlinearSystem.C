@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -130,10 +130,6 @@ NonlinearSystem::preInit()
 {
   NonlinearSystemBase::preInit();
 
-  if (_automatic_scaling && _resid_vs_jac_scaling_param < 1. - TOLERANCE)
-    // Add diagonal matrix that will be used for computing scaling factors
-    _nl_implicit_sys.add_matrix<DiagonalMatrix>("scaling_matrix");
-
   if (_hybridized_kernels.hasObjects())
     addVector(HDGKernel::lm_increment_vector_name, true, GHOSTED);
 }
@@ -223,17 +219,14 @@ NonlinearSystem::solve()
   // store info about the solve
   _final_residual = _nl_implicit_sys.final_nonlinear_residual();
 
-  // Accumulate only the occurence of solution invalid warnings
-  _app.solutionInvalidity().solutionInvalidAccumulationTimeStep();
+  // Accumulate only the occurence of solution invalid warnings for each time step
+  _app.solutionInvalidity().solutionInvalidAccumulationTimeStep(_fe_problem.timeStep());
 
   // determine whether solution invalid occurs in the converged solution
   checkInvalidSolution();
 
   if (_use_coloring_finite_difference)
-  {
-    auto ierr = MatFDColoringDestroy(&_fdcoloring);
-    LIBMESH_CHKERR(ierr);
-  }
+    LibmeshPetscCall(MatFDColoringDestroy(&_fdcoloring));
 }
 
 void
@@ -293,12 +286,11 @@ NonlinearSystem::setupStandardFiniteDifferencedPreconditioner()
   PetscMatrix<Number> * petsc_mat =
       static_cast<PetscMatrix<Number> *>(&_nl_implicit_sys.get_system_matrix());
 
-  auto ierr = SNESSetJacobian(petsc_nonlinear_solver->snes(),
-                              petsc_mat->mat(),
-                              petsc_mat->mat(),
-                              SNESComputeJacobianDefault,
-                              nullptr);
-  LIBMESH_CHKERR(ierr);
+  LibmeshPetscCall(SNESSetJacobian(petsc_nonlinear_solver->snes(),
+                                   petsc_mat->mat(),
+                                   petsc_mat->mat(),
+                                   SNESComputeJacobianDefault,
+                                   nullptr));
 }
 
 void
@@ -321,44 +313,35 @@ NonlinearSystem::setupColoringFiniteDifferencedPreconditioner()
 
   petsc_mat->close();
 
-  auto ierr = (PetscErrorCode)0;
   ISColoring iscoloring;
 
   // PETSc 3.5.x
   MatColoring matcoloring;
-  ierr = MatColoringCreate(petsc_mat->mat(), &matcoloring);
-  CHKERRABORT(_communicator.get(), ierr);
-  ierr = MatColoringSetType(matcoloring, MATCOLORINGLF);
-  CHKERRABORT(_communicator.get(), ierr);
-  ierr = MatColoringSetFromOptions(matcoloring);
-  CHKERRABORT(_communicator.get(), ierr);
-  ierr = MatColoringApply(matcoloring, &iscoloring);
-  CHKERRABORT(_communicator.get(), ierr);
-  ierr = MatColoringDestroy(&matcoloring);
-  CHKERRABORT(_communicator.get(), ierr);
+  LibmeshPetscCallA(_communicator.get(), MatColoringCreate(petsc_mat->mat(), &matcoloring));
+  LibmeshPetscCallA(_communicator.get(), MatColoringSetType(matcoloring, MATCOLORINGLF));
+  LibmeshPetscCallA(_communicator.get(), MatColoringSetFromOptions(matcoloring));
+  LibmeshPetscCallA(_communicator.get(), MatColoringApply(matcoloring, &iscoloring));
+  LibmeshPetscCallA(_communicator.get(), MatColoringDestroy(&matcoloring));
 
-  ierr = MatFDColoringCreate(petsc_mat->mat(), iscoloring, &_fdcoloring);
-  CHKERRABORT(_communicator.get(), ierr);
-  ierr = MatFDColoringSetFromOptions(_fdcoloring);
-  CHKERRABORT(_communicator.get(), ierr);
+  LibmeshPetscCallA(_communicator.get(),
+                    MatFDColoringCreate(petsc_mat->mat(), iscoloring, &_fdcoloring));
+  LibmeshPetscCallA(_communicator.get(), MatFDColoringSetFromOptions(_fdcoloring));
   // clang-format off
-  ierr =MatFDColoringSetFunction(_fdcoloring,
-                           (PetscErrorCode(*)(void))(void (*)(void)) &
-                               libMesh::libmesh_petsc_snes_fd_residual,
-                           &petsc_nonlinear_solver);
-  CHKERRABORT(_communicator.get(), ierr);
+  LibmeshPetscCallA(_communicator.get(), MatFDColoringSetFunction(_fdcoloring,
+                                                                  (PetscErrorCode(*)(void))(void (*)(void)) &
+                                                                      libMesh::libmesh_petsc_snes_fd_residual,
+                                                                  &petsc_nonlinear_solver));
   // clang-format on
-  ierr = MatFDColoringSetUp(petsc_mat->mat(), iscoloring, _fdcoloring);
-  CHKERRABORT(_communicator.get(), ierr);
-  ierr = SNESSetJacobian(petsc_nonlinear_solver.snes(),
-                         petsc_mat->mat(),
-                         petsc_mat->mat(),
-                         SNESComputeJacobianDefaultColor,
-                         _fdcoloring);
-  CHKERRABORT(_communicator.get(), ierr);
+  LibmeshPetscCallA(_communicator.get(),
+                    MatFDColoringSetUp(petsc_mat->mat(), iscoloring, _fdcoloring));
+  LibmeshPetscCallA(_communicator.get(),
+                    SNESSetJacobian(petsc_nonlinear_solver.snes(),
+                                    petsc_mat->mat(),
+                                    petsc_mat->mat(),
+                                    SNESComputeJacobianDefaultColor,
+                                    _fdcoloring));
   // PETSc >=3.3.0
-  ierr = ISColoringDestroy(&iscoloring);
-  CHKERRABORT(_communicator.get(), ierr);
+  LibmeshPetscCallA(_communicator.get(), ISColoringDestroy(&iscoloring));
 }
 
 bool
@@ -399,7 +382,16 @@ NonlinearSystem::getSNES()
       dynamic_cast<PetscNonlinearSolver<Number> *>(nonlinearSolver());
 
   if (petsc_solver)
-    return petsc_solver->snes();
+  {
+    const char * snes_prefix = nullptr;
+    std::string snes_prefix_str;
+    if (system().prefix_with_name())
+    {
+      snes_prefix_str = system().prefix();
+      snes_prefix = snes_prefix_str.c_str();
+    }
+    return petsc_solver->snes(snes_prefix);
+  }
   else
     mooseError("It is not a petsc nonlinear solver");
 }
@@ -407,7 +399,7 @@ NonlinearSystem::getSNES()
 void
 NonlinearSystem::residualAndJacobianTogether()
 {
-  if (_fe_problem.solverParams()._type == Moose::ST_JFNK)
+  if (_fe_problem.solverParams(number())._type == Moose::ST_JFNK)
     mooseError(
         "Evaluting the residual and Jacobian together does not make sense for a JFNK solve type in "
         "which only function evaluations are required, e.g. there is no need to form a matrix");

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -32,7 +32,7 @@ public:
   void computeProperties() override;
 
 protected:
-  void initQpStatefulProperties() override;
+  void initQpStatefulProperties() override {}
 
   /// User object managing the execution of the NEML2 model
   const NEML2ModelExecutor & _execute_neml2_model;
@@ -43,8 +43,8 @@ protected:
   /// Initial condition
   const MaterialProperty<T> * _prop0;
 
-  /// labled view to the requested output (or its derivative)
-  const neml2::Tensor & _output_view;
+  /// Reference to the requested output (or its derivative) value
+  const neml2::Tensor & _value;
 #endif
 };
 
@@ -54,4 +54,6 @@ protected:
 DefineNEML2ToMOOSEMaterialPropertyAlias(Real, Real);
 DefineNEML2ToMOOSEMaterialPropertyAlias(SymmetricRankTwoTensor, SymmetricRankTwoTensor);
 DefineNEML2ToMOOSEMaterialPropertyAlias(SymmetricRankFourTensor, SymmetricRankFourTensor);
-DefineNEML2ToMOOSEMaterialPropertyAlias(std::vector<Real>, StdVector);
+DefineNEML2ToMOOSEMaterialPropertyAlias(RealVectorValue, RealVectorValue);
+DefineNEML2ToMOOSEMaterialPropertyAlias(RankTwoTensor, RankTwoTensor);
+DefineNEML2ToMOOSEMaterialPropertyAlias(RankFourTensor, RankFourTensor);

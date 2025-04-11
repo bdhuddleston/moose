@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -350,6 +350,14 @@ public:
     return _du_dotdot_du;
   }
 
+  const ADTemplateVariableCurl<OutputType> & adCurlSln() const
+  {
+    _need_ad = _need_ad_curl_u = true;
+    curlPhi();
+    curlPhiFace();
+    return _ad_curl_u;
+  }
+
   ///////////////////////// Nodal value getters ///////////////////////////////////////////
 
   const OutputType & nodalValueDot() const;
@@ -461,6 +469,15 @@ private:
   void assignADNodalValue(const ADReal & value, const unsigned int & component);
   void fetchADNodalValues();
 
+  /**
+   * Internal method for computeValues() and computeMonomialValues()
+   *
+   * Monomial is a template parameter so that we get compile time optimization
+   * for monomial vs non-monomial
+   */
+  template <bool monomial>
+  void computeValuesInternal();
+
   const libMesh::FEType & _fe_type;
 
   const unsigned int _var_num;
@@ -514,6 +531,7 @@ private:
   mutable bool _need_ad_grad_u;
   mutable bool _need_ad_grad_u_dot;
   mutable bool _need_ad_second_u;
+  mutable bool _need_ad_curl_u;
 
   bool _has_dof_indices;
 
@@ -547,6 +565,7 @@ private:
   ADTemplateVariableValue<OutputType> _ad_u_dot;
   ADTemplateVariableValue<OutputType> _ad_u_dotdot;
   ADTemplateVariableGradient<OutputType> _ad_grad_u_dot;
+  ADTemplateVariableCurl<OutputType> _ad_curl_u;
 
   // time derivatives
 
@@ -554,19 +573,19 @@ private:
   FieldVariableValue _u_dot;
 
   /// u_dotdot (second time derivative)
-  FieldVariableValue _u_dotdot, _u_dotdot_bak;
+  FieldVariableValue _u_dotdot;
 
   /// u_dot_old (time derivative)
-  FieldVariableValue _u_dot_old, _u_dot_old_bak;
+  FieldVariableValue _u_dot_old;
 
   /// u_dotdot_old (second time derivative)
-  FieldVariableValue _u_dotdot_old, _u_dotdot_old_bak;
+  FieldVariableValue _u_dotdot_old;
 
   /// derivative of u_dot wrt u
   VariableValue _du_dot_du;
 
   /// derivative of u_dotdot wrt u
-  VariableValue _du_dotdot_du, _du_dotdot_du_bak;
+  VariableValue _du_dotdot_du;
 
   /// The current qrule. This has to be a reference because the current qrule will be constantly
   /// changing. If we initialized this to point to one qrule, then in the next calculation we would

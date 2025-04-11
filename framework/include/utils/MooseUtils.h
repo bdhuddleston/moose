@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -36,6 +36,7 @@
 #include <list>
 #include <filesystem>
 #include <deque>
+#include <regex>
 
 // Forward Declarations
 class InputParameters;
@@ -116,6 +117,13 @@ void escape(std::string & str);
  * Standard scripting language trim function
  */
 std::string trim(const std::string & str, const std::string & white_space = " \t\n\v\f\r");
+
+/**
+ * Removes additional whitespace from a string
+ *
+ * Removes beginning whitespace, end whitespace, and repeated whitespace into a single space
+ */
+std::string removeExtraWhitespace(const std::string & str);
 
 /**
  * Python like split functions for strings.
@@ -796,7 +804,7 @@ expandAllMatches(const std::vector<T> & candidates, std::vector<T> & patterns)
 /**
  * This function will split the passed in string on a set of delimiters appending the substrings
  * to the passed in vector.  The delimiters default to "/" but may be supplied as well.  In
- * addition if min_len is supplied, the minimum token length will be greater than the supplied
+ * addition if min_len is supplied, the minimum token length will be >= than the supplied
  * value. T should be std::string or a MOOSE derived string class.
  */
 template <typename T>
@@ -953,6 +961,17 @@ concatenate(std::vector<T> c1, const T & item)
 }
 
 /**
+ * Concatenates \p value into a single string separated by \p separator
+ */
+std::string stringJoin(const std::vector<std::string> & values,
+                       const std::string & separator = " ");
+
+/**
+ * @return Whether or not \p value begins with \p begin_value
+ */
+bool beginsWith(const std::string & value, const std::string & begin_value);
+
+/**
  * Return the number of digits for a number.
  *
  * This can foster quite a large discussion:
@@ -1073,11 +1092,11 @@ wildcardEqual(AnyType, const T &)
 /**
  * Find a specific pair in a container matching on first, second or both pair components
  */
-template <typename C, typename M1, typename M2>
-typename C::iterator
-findPair(C & container, const M1 & first, const M2 & second)
+template <typename C, typename It, typename M1, typename M2>
+auto
+findPair(C & container, It start_iterator, const M1 & first, const M2 & second)
 {
-  return std::find_if(container.begin(),
+  return std::find_if(start_iterator,
                       container.end(),
                       [&](auto & item) {
                         return wildcardEqual(first, item.first) &&

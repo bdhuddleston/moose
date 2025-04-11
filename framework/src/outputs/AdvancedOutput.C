@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -484,7 +484,7 @@ AdvancedOutput::initAvailableLists()
 void
 AdvancedOutput::initExecutionTypes(const std::string & name, ExecFlagEnum & input)
 {
-  // Build the input paramemter name
+  // Build the input parameter name
   std::string param_name = "execute_";
   param_name += name + "_on";
 

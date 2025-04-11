@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -197,11 +197,17 @@ public:
   /// Print the rank four tensor
   void print(std::ostream & stm = Moose::out) const;
 
+  friend std::ostream & operator<<(std::ostream & os, const RankFourTensorTempl<T> & t)
+  {
+    t.print(os);
+    return os;
+  }
+
   /// Print the values of the rank four tensor
   void printReal(std::ostream & stm = Moose::out) const;
 
   /// copies values from a into this tensor
-  RankFourTensorTempl<T> & operator=(const RankFourTensorTempl<T> & a);
+  RankFourTensorTempl<T> & operator=(const RankFourTensorTempl<T> & a) = default;
 
   /**
    * Assignment-from-scalar operator.  Used only to zero out the tensor.

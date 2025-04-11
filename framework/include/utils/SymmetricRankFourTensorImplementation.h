@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -157,14 +157,6 @@ SymmetricRankFourTensorTempl<T>::rotate(const TypeTensor<T> & R)
 
   // rotate tensor
   (*this) = M * (*this) * M.transposeMajor();
-}
-
-template <typename T>
-SymmetricRankFourTensorTempl<T> &
-SymmetricRankFourTensorTempl<T>::operator=(const SymmetricRankFourTensorTempl<T> & a)
-{
-  std::copy(a._vals.begin(), a._vals.end(), _vals.begin());
-  return *this;
 }
 
 template <typename T>

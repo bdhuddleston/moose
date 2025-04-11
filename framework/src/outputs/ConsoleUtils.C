@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -24,8 +24,12 @@
 #include "Checkpoint.h"
 #include "InputParameterWarehouse.h"
 #include "Registry.h"
+#include "CommandLine.h"
+
+#include <filesystem>
 
 #include "libmesh/string_to_enum.h"
+#include "libmesh/simple_range.h"
 
 using namespace libMesh;
 
@@ -46,6 +50,30 @@ outputFrameworkInformation(const MooseApp & app)
 
   if (app.getSystemInfo() != NULL)
     oss << app.getSystemInfo()->getInfo();
+
+  oss << "Input File(s):\n";
+  for (const auto & entry : app.getInputFileNames())
+    oss << "  " << std::filesystem::absolute(entry).c_str() << "\n";
+  oss << "\n";
+
+  const auto & cl = std::as_const(*app.commandLine());
+  // We skip the 0th argument of the main app, i.e., the name used to invoke the program
+  const auto cl_range =
+      as_range(std::next(cl.getEntries().begin(), app.multiAppLevel() == 0), cl.getEntries().end());
+
+  std::stringstream args_oss;
+  for (const auto & entry : cl_range)
+    if (!entry.hit_param && !entry.subapp_name && entry.name != "-i")
+      args_oss << "  " << cl.formatEntry(entry) << "\n";
+  if (args_oss.str().size())
+    oss << "Command Line Argument(s):\n" << args_oss.str() << "\n";
+
+  std::stringstream input_args_oss;
+  for (const auto & entry : cl_range)
+    if (entry.hit_param && !entry.subapp_name)
+      input_args_oss << "  " << cl.formatEntry(entry) << "\n";
+  if (input_args_oss.str().size())
+    oss << "Command Line Input Argument(s):\n" << input_args_oss.str() << "\n";
 
   const auto checkpoints = app.getOutputWarehouse().getOutputs<Checkpoint>();
   if (checkpoints.size())
@@ -127,6 +155,12 @@ outputMeshInformation(FEProblemBase & problem, bool verbose)
   }
   else
     oss << std::setw(console_field_width) << "  Elems:" << mesh.n_active_elem() << '\n';
+  if (moose_mesh.maxPLevel() > 0)
+    oss << std::setw(console_field_width)
+        << "  Max p-Refinement Level: " << static_cast<std::size_t>(moose_mesh.maxPLevel()) << '\n';
+  if (moose_mesh.maxHLevel() > 0)
+    oss << std::setw(console_field_width)
+        << "  Max h-Refinement Level: " << static_cast<std::size_t>(moose_mesh.maxHLevel()) << '\n';
 
   if (verbose)
   {
@@ -345,13 +379,17 @@ outputExecutionInformation(const MooseApp & app, FEProblemBase & problem)
     oss << std::setw(console_field_width)
         << "  TimeIntegrator(s): " << MooseUtils::join(time_integrator_names, ", ") << '\n';
 
-  oss << std::setw(console_field_width) << "  Solver Mode: " << problem.solverTypeString() << '\n';
+  for (const std::size_t i : make_range(problem.numSolverSystems()))
+    oss << std::setw(console_field_width)
+        << "  Solver Mode" +
+               (problem.numSolverSystems() > 1 ? " - system " + std::to_string(i) : "") + ": "
+        << problem.solverTypeString(i) << '\n';
 
   const std::string & pc_desc = problem.getPetscOptions().pc_description;
   if (!pc_desc.empty())
     oss << std::setw(console_field_width) << "  PETSc Preconditioner: " << pc_desc << '\n';
 
-  for (const auto i : make_range(problem.numNonlinearSystems()))
+  for (const std::size_t i : make_range(problem.numNonlinearSystems()))
   {
     MoosePreconditioner const * mpc = problem.getNonlinearSystemBase(i).getPreconditioner();
     if (mpc)
@@ -364,7 +402,8 @@ outputExecutionInformation(const MooseApp & app, FEProblemBase & problem)
         oss << " (auto)";
       oss << '\n';
     }
-    oss << std::endl;
+    if (i == cast_int<std::size_t>(problem.numNonlinearSystems() - 1))
+      oss << std::endl;
   }
 
   return oss.str();

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -31,10 +31,16 @@ InputParameters
 MaterialOutputAction::validParams()
 {
   InputParameters params = Action::validParams();
+  params.addClassDescription("Outputs material properties to various Outputs objects, based on the "
+                             "parameters set in each Material");
   /// A flag to tell this action whether or not to print the unsupported properties
   /// Note: A derived class can set this to false, override materialOutput and output
   ///       a particular property that is not supported by this class.
   params.addPrivateParam("print_unsupported_prop_names", true);
+  params.addParam<bool>("print_automatic_aux_variable_creation",
+                        true,
+                        "Flag to print list of aux variables created for automatic output by "
+                        "MaterialOutputAction.");
   return params;
 }
 
@@ -147,13 +153,32 @@ MaterialOutputAction::act()
           material_names.insert(curr_material_names.begin(), curr_material_names.end());
         }
       }
-      // If the material object has limited outputs, store the variables associated with the
-      // output objects
-      if (!outputs.empty())
-        for (const auto & output_name : outputs)
-          _material_variable_names_map[output_name].insert(_material_variable_names.begin(),
-                                                           _material_variable_names.end());
+      // If the material object has explicitly defined outputs, store the variables associated with
+      // the output objects
+      if (outputs.find("none") == outputs.end())
+      {
+        // Get all available output names from OutputWarehouse that support material output
+        const auto & all_output_names = _output_warehouse.getAllMaterialPropertyOutputNames();
+
+        // For reserved name "all", set outputs to match all available output names
+        if (outputs.find("all") != outputs.end())
+          outputs = all_output_names;
+
+        // Iterate through all available output names and update _material_variable_names_map
+        // based on which of these output names are found in 'outputs' parameter
+        for (const auto & output_name : all_output_names)
+        {
+          if (outputs.find(output_name) != outputs.end())
+            _material_variable_names_map[output_name].insert(_material_variable_names.begin(),
+                                                             _material_variable_names.end());
+          else
+            _material_variable_names_map[output_name].insert({});
+        }
+      }
     }
+    else if (output_properties.size())
+      mooseWarning("Material properties output specified is not created because 'outputs' is not "
+                   "set in the Material, and neither is Outputs/output_material_properties");
   }
   if (unsupported_names.size() > 0 && get_names_only &&
       getParam<bool>("print_unsupported_prop_names"))
@@ -189,7 +214,8 @@ MaterialOutputAction::act()
                    " to restrict the material properties to output");
       _problem->addAuxVariable("MooseVariableConstMonomial", var_name, params);
     }
-    if (material_names.size() > 0)
+
+    if (material_names.size() > 0 && getParam<bool>("print_automatic_aux_variable_creation"))
       _console << COLOR_CYAN << "The following total " << material_names.size()
                << " aux variables:" << oss.str() << "\nare added for automatic output by " << type()
                << "." << COLOR_DEFAULT << std::endl;

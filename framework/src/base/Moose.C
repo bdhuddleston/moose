@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -449,7 +449,8 @@ registerActions(Syntax & syntax,
 {
   Registry::registerActionsTo(action_factory, obj_labels);
 
-  // TODO: Why is this here?
+  // Add these actions here so they are always executed last, without setting any dependency
+  registerTask("dump_objects", false);
   registerTask("finish_input_file_output", false);
 }
 
@@ -496,6 +497,8 @@ associateSyntaxInner(Syntax & syntax, ActionFactory & /*action_factory*/)
   registerSyntax("CreateDisplacedProblemAction", "Mesh");
   registerSyntax("DisplayGhostingAction", "Mesh");
   registerSyntax("AddMeshGeneratorAction", "Mesh/*");
+  registerSyntaxTask("EmptyAction", "Mesh/BatchMeshGeneratorAction", "no_action");
+  registerSyntax("BatchMeshGeneratorAction", "Mesh/BatchMeshGeneratorAction/*");
   registerSyntax("ElementIDOutputAction", "Mesh");
   syntax.registerSyntaxType("Mesh/*", "MeshGeneratorName");
 
@@ -565,6 +568,7 @@ associateSyntaxInner(Syntax & syntax, ActionFactory & /*action_factory*/)
 
   registerSyntax("AddOutputAction", "Outputs/*");
   registerSyntax("CommonOutputAction", "Outputs");
+  registerSyntax("MaterialOutputAction", "Outputs");
   registerSyntax("AutoCheckpointAction", "Outputs");
   syntax.registerSyntaxType("Outputs/*", "OutputName");
 

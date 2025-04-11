@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -36,7 +36,7 @@ BoundsBase::BoundsBase(const InputParameters & parameters)
     _fe_var(_bounded_var.isFV() ? nullptr
                                 : &_subproblem.getStandardVariable(_tid, _bounded_var_name))
 {
-  if (!Moose::PetscSupport::isSNESVI(*dynamic_cast<FEProblemBase *>(&_subproblem)))
+  if (!Moose::PetscSupport::isSNESVI(*dynamic_cast<FEProblemBase *>(&_c_fe_problem)))
     mooseDoOnce(
         mooseWarning("A variational inequalities solver must be used in conjunction with Bounds"));
 

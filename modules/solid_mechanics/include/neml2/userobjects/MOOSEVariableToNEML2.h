@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -15,7 +15,7 @@
  * Gather a MOOSE variable for insertion into the NEML2 model.
  */
 template <unsigned int state>
-class MOOSEVariableToNEML2Templ : public MOOSEToNEML2Batched
+class MOOSEVariableToNEML2Templ : public MOOSEToNEML2Batched<Real>
 {
 public:
   static InputParameters validParams();
@@ -24,7 +24,7 @@ public:
 
 #ifdef NEML2_ENABLED
 protected:
-  torch::Tensor convertQpMOOSEData() const override;
+  const MooseArray<Real> & elemMOOSEData() const override { return _moose_variable; }
 
   /// Coupled MOOSE variable to read data from
   const VariableValue & _moose_variable;

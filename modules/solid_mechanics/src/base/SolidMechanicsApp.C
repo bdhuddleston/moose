@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -21,7 +21,6 @@ SolidMechanicsApp::validParams()
   params.set<bool>("use_legacy_initial_residual_evaluation_behavior") = false;
   params.addCommandLineParam<bool>("parse_neml2_only",
                                    "--parse-neml2-only",
-                                   false,
                                    "Executes the [NEML2] block in the input file and terminate.");
   return params;
 }
@@ -54,7 +53,10 @@ SolidMechanicsApp::runInputFile()
   MooseApp::runInputFile();
 
   if (getParam<bool>("parse_neml2_only"))
+  {
+    _early_exit_param = "--parse-neml2-only";
     _ready_to_exit = true;
+  }
 }
 
 static void
@@ -198,6 +200,13 @@ SolidMechanicsApp::registerAll(Factory & f, ActionFactory & af, Syntax & s)
 void
 SolidMechanicsApp::registerApps()
 {
+  const std::string doc = "New Engineering Material model Library, version 2 ";
+#ifdef NEML2_ENABLED
+  addCapability("neml2", true, doc + "is available.");
+#else
+  addCapability("neml2", false, doc + "is not available.");
+#endif
+
   registerApp(SolidMechanicsApp);
 }
 

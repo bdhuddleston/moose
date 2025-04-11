@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -208,6 +208,7 @@ public:
   nonlocalCouplingEntries(const THREAD_ID tid, const unsigned int nl_sys_num);
 
   virtual bool hasVariable(const std::string & var_name) const override;
+  bool hasSolverVariable(const std::string & var_name) const;
   using SubProblem::getVariable;
   virtual const MooseVariableFieldBase &
   getVariable(const THREAD_ID tid,
@@ -392,8 +393,8 @@ public:
    * @param linear_sys_num The number of the linear system (1,..,num. of lin. systems)
    * @param po The petsc options for the solve, if not supplied, the defaults are used
    */
-  void solveLinearSystem(const unsigned int linear_sys_num,
-                         const Moose::PetscSupport::PetscOptions * po = nullptr);
+  virtual void solveLinearSystem(const unsigned int linear_sys_num,
+                                 const Moose::PetscSupport::PetscOptions * po = nullptr);
 
   ///@{
   /**
@@ -498,7 +499,7 @@ public:
   /**
    * Return solver type as a human readable string
    */
-  virtual std::string solverTypeString() { return Moose::stringify(solverParams()._type); }
+  virtual std::string solverTypeString(unsigned int solver_sys_num = 0);
 
   /**
    * Returns true if we are in or beyond the initialSetup stage
@@ -615,7 +616,7 @@ public:
   virtual Function & getFunction(const std::string & name, const THREAD_ID tid = 0);
 
   /// Add a MeshDivision
-  void
+  virtual void
   addMeshDivision(const std::string & type, const std::string & name, InputParameters & params);
   /// Get a MeshDivision
   MeshDivision & getMeshDivision(const std::string & name, const THREAD_ID tid = 0) const;
@@ -703,6 +704,18 @@ public:
   virtual SystemBase & systemBaseAuxiliary() override;
 
   virtual NonlinearSystem & getNonlinearSystem(const unsigned int sys_num);
+
+  /**
+   * Get constant reference to a system in this problem
+   * @param sys_num The number of the system
+   */
+  virtual const SystemBase & getSystemBase(const unsigned int sys_num) const;
+
+  /**
+   * Get non-constant reference to a system in this problem
+   * @param sys_num The number of the system
+   */
+  virtual SystemBase & getSystemBase(const unsigned int sys_num);
 
   /**
    * Get non-constant reference to a linear system
@@ -867,6 +880,12 @@ public:
   void projectSolution();
 
   /**
+   *  Retrieves the current initial condition state.
+   * @return  current initial condition state
+   */
+  unsigned short getCurrentICState();
+
+  /**
    * Project initial conditions for custom \p elem_range and \p bnd_node_range
    * This is needed when elements/boundary nodes are added to a specific subdomain
    * at an intermediate step
@@ -885,9 +904,9 @@ public:
   virtual void addInterfaceMaterial(const std::string & material_name,
                                     const std::string & name,
                                     InputParameters & parameters);
-  void addFunctorMaterial(const std::string & functor_material_name,
-                          const std::string & name,
-                          InputParameters & parameters);
+  virtual void addFunctorMaterial(const std::string & functor_material_name,
+                                  const std::string & name,
+                                  InputParameters & parameters);
 
   /**
    * Add the MooseVariables and the material properties that the current materials depend on to the
@@ -1660,12 +1679,12 @@ public:
   /**
    * Get the solver parameters
    */
-  SolverParams & solverParams();
+  SolverParams & solverParams(unsigned int solver_sys_num = 0);
 
   /**
    * const version
    */
-  const SolverParams & solverParams() const;
+  const SolverParams & solverParams(unsigned int solver_sys_num = 0) const;
 
 #ifdef LIBMESH_ENABLE_AMR
   // Adaptivity /////
@@ -2354,10 +2373,6 @@ public:
    */
   void clearCurrentJacobianMatrixTags() {}
 
-  using SubProblem::doingPRefinement;
-  virtual void doingPRefinement(bool doing_p_refinement,
-                                const MultiMooseEnum & disable_p_refinement_for_families) override;
-
   virtual void needFV() override { _have_fv = true; }
   virtual bool haveFV() const override { return _have_fv; }
 
@@ -2415,6 +2430,11 @@ private:
                                      const unsigned int nl_sys_num,
                                      const std::string & base_name,
                                      bool & reinit_displaced);
+
+  /**
+   * Make basic solver params for linear solves
+   */
+  static SolverParams makeLinearSolverParams();
 
 protected:
   bool _initialized;
@@ -2710,7 +2730,7 @@ protected:
   /// Whether there are active material properties on each thread
   std::vector<unsigned char> _has_active_material_properties;
 
-  SolverParams _solver_params;
+  std::vector<SolverParams> _solver_params;
 
   /// Determines whether and which subdomains are to be checked to ensure that they have an active kernel
   CoverageCheckMode _kernel_coverage_check;
@@ -2789,6 +2809,9 @@ protected:
   /// Automatic differentiaion (AD) flag which indicates whether any consumer has
   /// requested an AD material property or whether any suppier has declared an AD material property
   bool _using_ad_mat_props;
+
+  // loop state during projection of initial conditions
+  unsigned short _current_ic_state;
 
 private:
   /**

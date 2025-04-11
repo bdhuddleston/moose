@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -367,14 +367,6 @@ RankTwoTensorTempl<T>
 RankTwoTensorTempl<T>::transpose() const
 {
   return libMesh::TensorValue<T>::transpose();
-}
-
-template <typename T>
-RankTwoTensorTempl<T> &
-RankTwoTensorTempl<T>::operator=(const RankTwoTensorTempl<T> & a)
-{
-  libMesh::TensorValue<T>::operator=(a);
-  return *this;
 }
 
 template <typename T>

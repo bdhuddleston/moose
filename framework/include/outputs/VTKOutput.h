@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -25,6 +25,8 @@ public:
    * @param parameters Object parameters
    */
   VTKOutput(const InputParameters & parameters);
+
+  bool supportsMaterialPropertyOutput() const override { return true; }
 
 protected:
   /**

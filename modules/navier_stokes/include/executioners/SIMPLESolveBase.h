@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -56,6 +56,9 @@ public:
 
   /// Setup pressure pin if there is need for one
   void setupPressurePin();
+
+  /// Check if the user defined time kernels
+  virtual void checkIntegrity() {}
 
 protected:
   void checkDependentParameterError(const std::string & main_parameter,

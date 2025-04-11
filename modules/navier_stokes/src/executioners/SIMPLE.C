@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -36,6 +36,7 @@ SIMPLE::init()
 {
   _problem.execute(EXEC_PRE_MULTIAPP_SETUP);
   _problem.initialSetup();
+  _simple_solve.checkIntegrity();
   _simple_solve.linkRhieChowUserObject();
   _simple_solve.setupPressurePin();
 }

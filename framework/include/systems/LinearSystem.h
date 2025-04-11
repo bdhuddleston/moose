@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -65,7 +65,7 @@ public:
    * Considering that we don't have transient capabilities for linear
    * systems at the moment, this is false.
    */
-  virtual bool containsTimeKernel() override { return false; }
+  virtual bool containsTimeKernel() override;
   virtual std::vector<std::string> timeKernelVariableNames() override { return {}; }
 
   /**
@@ -127,6 +127,8 @@ public:
   {
     return _new_gradient;
   }
+
+  virtual void compute(ExecFlagType type) override;
 
 protected:
   /**
