@@ -28,6 +28,7 @@ public:
                                       const Real strain,
                                       const Real crack_initiation_strain,
                                       const Real crack_max_strain,
+                                      const Real crack_max_strain_old,
                                       const Real cracking_stress,
                                       const Real youngs_modulus, 
                                       const Real poissons_ratio) override;
@@ -39,4 +40,10 @@ protected:
 
   /// Fracture toughness
   const Real & _fracture_toughness;
+
+  /// Strain rate exponent 
+  const Real & _rate_exponent; 
+
+  /// Reference strain rate 
+  const Real & _ref_strain_rate;
 };

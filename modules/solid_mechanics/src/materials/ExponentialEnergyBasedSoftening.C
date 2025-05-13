@@ -29,22 +29,35 @@ ExponentialEnergyBasedSoftening::validParams()
       "fracture_toughness",
       "fracture_toughness > 0",
       "Fracture toughness used to calculate the softening slope. ");
+  params.addRangeCheckedParam<Real>(
+      "rate_exponent", 
+      1.0, 
+      "rate_exponent >= 0", 
+      "Exponent on normalized strain rate. ");
+  params.addRangeCheckedParam<Real>(
+      "reference_strain_rate", 
+      1.0, 
+      "reference_strain_rate > 0", 
+      "Reference strain rate for strain rate sensitivity. ");
   return params;
 }
 
 ExponentialEnergyBasedSoftening::ExponentialEnergyBasedSoftening(const InputParameters & parameters)
   : SmearedCrackSofteningBase(parameters),
     _residual_stress(getParam<Real>("residual_stress")),
-    _fracture_toughness(getParam<Real>("fracture_toughness"))
+    _fracture_toughness(getParam<Real>("fracture_toughness")), 
+    _rate_exponent(getParam<Real>("rate_exponent")), 
+    _ref_strain_rate(getParam<Real>("reference_strain_rate"))
 {
 }
 
 void
 ExponentialEnergyBasedSoftening::computeCrackingRelease(Real & stress,
                                              Real & stiffness_ratio,
-                                             const Real strainrate,
+                                             const Real /*strain*/,
                                              const Real crack_initiation_strain,
                                              const Real crack_max_strain,
+                                             const Real crack_max_strain_old,
                                              const Real cracking_stress,
                                              const Real youngs_modulus, 
                                              const Real poissons_ratio)
@@ -62,9 +75,12 @@ ExponentialEnergyBasedSoftening::computeCrackingRelease(Real & stress,
     ele_len = std::sqrt(_current_elem->volume());
   }
 
+  const Real strainrate = (crack_max_strain - crack_max_strain_old) / _dt;
+  const Real normalizing = 1.0 + std::pow(1e-4 / _ref_strain_rate, _rate_exponent); 
+
   // Calculate initial slope of exponential curve
-  Real ratetoughness = _fracture_toughness/1.1 * (1.0 + 0.1 * std::pow(strainrate / _dt, 0.15)); 
-  Real energy_release_rate = (ratetoughness * ratetoughness) * (1 - poissons_ratio * poissons_ratio) / youngs_modulus;  
+  const Real ratetoughness = _fracture_toughness * (1 + std::pow(strainrate / _ref_strain_rate, _rate_exponent)) / normalizing;
+  const Real energy_release_rate = (ratetoughness * ratetoughness) * (1 - poissons_ratio * poissons_ratio) / youngs_modulus;  
   const Real frac_stress_sqr = cracking_stress * cracking_stress;
   const Real l_max = 2 * energy_release_rate * youngs_modulus / frac_stress_sqr;
 

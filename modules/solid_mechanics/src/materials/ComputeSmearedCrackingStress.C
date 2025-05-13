@@ -452,10 +452,10 @@ ComputeSmearedCrackingStress::updateCrackingStateAndStress()
         cracked = true;
         _softening_models[i]->computeCrackingRelease(sigma(i),
                                                      stiffness_ratio,
-                                                     //strain_in_crack_dir(i),
-                                                     _crack_max_strain[_qp](i) - _crack_max_strain_old[_qp](i),
+                                                     strain_in_crack_dir(i),
                                                      _crack_initiation_strain[_qp](i),
                                                      _crack_max_strain[_qp](i),
+                                                     _crack_max_strain_old[_qp](i),
                                                      cracking_stress,
                                                      youngs_modulus,
                                                      poissons_ratio);
