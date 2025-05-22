@@ -456,6 +456,7 @@ ComputeSmearedCrackingStress::updateCrackingStateAndStress()
                                                      _crack_max_strain[_qp](i) - _crack_max_strain_old[_qp](i),
                                                      _crack_initiation_strain[_qp](i),
                                                      _crack_max_strain[_qp](i),
+                                                     _crack_max_strain_old[_qp](i),
                                                      cracking_stress,
                                                      youngs_modulus,
                                                      poissons_ratio);

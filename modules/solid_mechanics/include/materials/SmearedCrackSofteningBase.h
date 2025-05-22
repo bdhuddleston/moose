@@ -46,6 +46,7 @@ public:
                                       const Real strain,
                                       const Real crack_initiation_strain,
                                       const Real crack_max_strain,
+                                      const Real crack_max_strain_old,
                                       const Real cracking_stress,
                                       const Real youngs_modulus, 
                                       const Real poissons_ratio) = 0;
