@@ -1,0 +1,11 @@
+[Tests]
+  design = 'source/materials/MixtureModelBiMaterialRankTwo.md'
+  issues = ''
+  [stress]
+    type = Exodiff
+    input = stress.i
+    allow_warnings = false 
+    exodiff = stress_out.e
+    requirement = 'The MOOSE SolidMechanics module shall simulate extension of a multi-material mesh.'
+  []
+[]
