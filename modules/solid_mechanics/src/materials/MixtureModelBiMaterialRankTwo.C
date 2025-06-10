@@ -40,8 +40,8 @@ void
 MixtureModelBiMaterialRankTwoTempl<is_ad>::assignQpPropertiesFromMixtureModel()
 {
     const auto ratio = _material_ratio[_qp];
-    _material_prop[_qp] = ratio*(*_bimaterial_material_prop[0])[_qp] + 
-                    (1 - ratio)*(*_bimaterial_material_prop[1])[_qp];
+    _material_prop[_qp] = ratio * (*_bimaterial_material_prop[0])[_qp] + 
+                    (1 - ratio) * (*_bimaterial_material_prop[1])[_qp];
 }
 
 template class MixtureModelBiMaterialRankTwoTempl<false>;
