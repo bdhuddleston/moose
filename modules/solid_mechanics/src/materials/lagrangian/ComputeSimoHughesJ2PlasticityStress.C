@@ -98,7 +98,8 @@ ComputeSimoHughesJ2PlasticityStress::computeQpPK1Stress()
         2. / 3. * _be[_qp].times<i, j, l, k>(_inv_df[_qp]));
 
   // Check for plastic loading and do return mapping
-  Real delta_ep = 0;
+  // Real delta_ep = 0;
+  _delta_ep = 0;
   if (computeResidual(s_eff, 0) > 0)
   {
     // Initialize the derivative of the internal variable
@@ -113,20 +114,20 @@ ComputeSimoHughesJ2PlasticityStress::computeQpPK1Stress()
                      I.times<i, j, k, l>(I));
     }
 
-    returnMappingSolve(s_eff, delta_ep, _console);
+    returnMappingSolve(s_eff, _delta_ep, _console);
 
     // Correct the derivative of the strain after return mapping
     if (_fe_problem.currentlyComputingJacobian())
       _d_be_d_F -=
           2. / 3. *
           (_be[_qp].trace() * _Np[_qp].times<i, j, k, l>(_d_deltaep_d_betr) +
-           delta_ep * _Np[_qp].times<i, j, k, l>(I) + delta_ep * _be[_qp].trace() * _d_n_d_be) *
+           _delta_ep * _Np[_qp].times<i, j, k, l>(I) + _delta_ep * _be[_qp].trace() * _d_n_d_be) *
           _d_be_d_F;
   }
 
   // Update intermediate and current configurations
-  _ep[_qp] = _ep_old[_qp] + delta_ep;
-  _be[_qp] -= 2. / 3. * delta_ep * _be[_qp].trace() * _Np[_qp];
+  _ep[_qp] = _ep_old[_qp] + _delta_ep;
+  _be[_qp] -= 2. / 3. * _delta_ep * _be[_qp].trace() * _Np[_qp];
   s = G * _be[_qp].deviatoric();
   RankTwoTensor tau = (K * (detJ * detJ - 1) / 2) * I + s;
   _pk1_stress[_qp] = tau * Fit;

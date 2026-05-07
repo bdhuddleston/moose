@@ -28,6 +28,8 @@ public:
   ComputeSimoHughesJ2PlasticityStress(const InputParameters & parameters);
 
   virtual void initialSetup() override;
+  
+  const Real getCurrentDeltaEp() const { return _delta_ep;}
 
 protected:
   virtual void initQpStatefulProperties() override;
@@ -67,5 +69,7 @@ private:
   RankTwoTensor _d_deltaep_d_betr;
   RankTwoTensor _d_R_d_betr;
   RankTwoTensor _d_J_d_betr;
+
+  Real _delta_ep;  /// scratch space to make current value of delta_ep available during iteration
   /// @}
 };
